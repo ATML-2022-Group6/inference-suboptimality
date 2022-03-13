@@ -1,3 +1,6 @@
 __pycache__
+.DS_Store
 
 vae_example/tmp
+
+datasets/mnist.pkl
