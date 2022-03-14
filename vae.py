@@ -7,14 +7,14 @@ from dataclasses import dataclass
 
 @dataclass
 class HyperParams:
-  latent_size = 50
-  image_size = 28 * 28
-  encoder_width = 200
-  decoder_width = 200
-  act_fun = stax.Elu
+  latent_size: int = 50
+  image_size: int = 28 * 28
+  encoder_width: int = 200
+  decoder_width: int = 200
+  act_fun: tuple = stax.Elu
 
 def log_bernoulli(logit, target):
-  loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.log1p(jnp.exp(-jnp.abs(logit)))
+  loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.log(1. + jnp.exp(-jnp.abs(logit)))
   return jnp.sum(loss)
 
 def build_vae(hps: HyperParams):
@@ -57,12 +57,12 @@ def build_vae(hps: HyperParams):
     logit = decoder(decoder_params, z)
 
     logpx = log_bernoulli(logit, x) # log p(x|z)
-    logpz = stats.norm.logpdf(z)    # log p(z)
-    logqz = stats.norm.logpdf(eps)  # log q(z|x)
+    logpz = jnp.sum(stats.norm.logpdf(z))    # log p(z)
+    logqz = jnp.sum(stats.norm.logpdf(eps))  # log q(z|x)
 
     elbo = logpx + logpz - logqz # TODO: Warmup const
 
-    return jnp.mean(elbo)
+    return elbo, logit, logpx, logpz, logqz
   
   return init_fun, apply_fun
 
