@@ -14,8 +14,10 @@ class HyperParams:
   act_fun: tuple = stax.Elu
 
 def log_bernoulli(logit, target):
-  loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.log(1. + jnp.exp(-jnp.abs(logit)))
-  return jnp.sum(loss)
+  # loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.log(1. + jnp.exp(-jnp.abs(logit)))
+  # loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.logaddexp(0, -jnp.abs(logit))
+  # return jnp.sum(loss)
+  return -jnp.sum(jnp.logaddexp(0., (1 - target * 2) * logit))
 
 def build_vae(hps: HyperParams):
 
@@ -57,10 +59,12 @@ def build_vae(hps: HyperParams):
     logit = decoder(decoder_params, z)
 
     logpx = log_bernoulli(logit, x) # log p(x|z)
-    logpz = jnp.sum(stats.norm.logpdf(z))    # log p(z)
-    logqz = jnp.sum(stats.norm.logpdf(eps))  # log q(z|x)
 
-    elbo = logpx + logpz - logqz # TODO: Warmup const
+    logpz = jnp.sum(stats.norm.logpdf(z))    # log p(z)
+    logqz = jnp.sum(stats.norm.logpdf(eps))  # log q(z|x)    
+    kld = logqz - logpz
+
+    elbo = logpx - kld # TODO: Warmup const
 
     return elbo, logit, logpx, logpz, logqz
   
