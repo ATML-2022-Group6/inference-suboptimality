@@ -6,7 +6,7 @@ from jax import numpy as jnp
 MNIST_PATH = "datasets/mnist.pkl"
 
 # Load Larochelle (binarised) MNIST data
-def get_mnist(path = MNIST_PATH) -> dict[str, jnp.ndarray]:
+def get_mnist(path = MNIST_PATH):
   with open(path, "rb") as f:
     data = pickle.load(f, encoding="latin1")
     mnist = {

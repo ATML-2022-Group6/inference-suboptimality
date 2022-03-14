@@ -36,7 +36,7 @@ def build_vae(hps: HyperParams):
     stax.Dense(hps.image_size),
   )
 
-  def init_fun(rng: random.KeyArray, input_shape: tuple[int,...]):
+  def init_fun(rng, input_shape):
     batch_shape = input_shape[:-1]
     assert input_shape[-1] == hps.image_size
 
@@ -49,7 +49,7 @@ def build_vae(hps: HyperParams):
     params = (encoder_params, decoder_params)
     return output_shape, params
   
-  def apply_fun(params: tuple[jnp.ndarray, jnp.ndarray], x: jnp.ndarray, **kwargs):
+  def apply_fun(params, x, **kwargs):
     rng = kwargs["rng"]
     encoder_params, decoder_params = params
 
