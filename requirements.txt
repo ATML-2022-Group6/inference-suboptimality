@@ -2,3 +2,4 @@ jax
 matplotlib
 numpy
 flax
+tqdm

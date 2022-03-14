@@ -37,7 +37,6 @@ def build_vae(hps: HyperParams):
   )
 
   def init_fun(rng, input_shape):
-    batch_shape = input_shape[:-1]
     assert input_shape[-1] == hps.image_size
 
     encoder_rng, decoder_rng = random.split(rng)
@@ -47,10 +46,9 @@ def build_vae(hps: HyperParams):
     output_shape, decoder_params = decoder_init(decoder_rng, input_shape=decoder_input_shape)
 
     params = (encoder_params, decoder_params)
-    return output_shape, params
+    return params
   
-  def apply_fun(params, x, **kwargs):
-    rng = kwargs["rng"]
+  def apply_fun(params, x, rng):
     encoder_params, decoder_params = params
 
     mu, logvar = encoder(encoder_params, x)
@@ -68,5 +66,13 @@ def build_vae(hps: HyperParams):
 
     return elbo, logit, logpx, logpz, logqz
   
-  return init_fun, apply_fun
+  # Sample from latent space and decode
+  def sample_fun(params, rng):
+    _, decoder_params = params
+    z = random.normal(rng, (hps.latent_size,))
+    logit = decoder(decoder_params, z)
+    recon = 1 / (1 + jnp.exp(-logit))
+    return recon
+  
+  return init_fun, apply_fun, sample_fun
 
