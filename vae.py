@@ -1,9 +1,12 @@
-from jax import lax, random
+from jax import lax, random, jit
 from jax import numpy as jnp
 from jax.scipy import stats
 from jax.example_libraries import stax
+from jax.tree_util import tree_map
 
 from dataclasses import dataclass
+
+import pickle
 
 @dataclass
 class HyperParams:
@@ -14,9 +17,6 @@ class HyperParams:
   act_fun: tuple = stax.Elu
 
 def log_bernoulli(logit, target):
-  # loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.log(1. + jnp.exp(-jnp.abs(logit)))
-  # loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.logaddexp(0, -jnp.abs(logit))
-  # return jnp.sum(loss)
   return -jnp.sum(jnp.logaddexp(0., (1 - target * 2) * logit))
 
 def build_vae(hps: HyperParams):
@@ -48,6 +48,7 @@ def build_vae(hps: HyperParams):
     params = (encoder_params, decoder_params)
     return params
   
+  @jit
   def apply_fun(params, x, rng):
     encoder_params, decoder_params = params
 
@@ -67,6 +68,7 @@ def build_vae(hps: HyperParams):
     return elbo, logit, logpx, logpz, logqz
   
   # Sample from latent space and decode
+  @jit
   def sample_fun(params, rng):
     _, decoder_params = params
     z = random.normal(rng, (hps.latent_size,))
@@ -76,3 +78,12 @@ def build_vae(hps: HyperParams):
   
   return init_fun, apply_fun, sample_fun
 
+def save_params(file_name, params):
+  with open(file_name, "wb") as f:
+    pickle.dump(params, f)
+
+def load_params(file_name):
+  with open(file_name, "rb") as f:
+    params = pickle.load(f)
+    # convert NP arrays to Jax arrays
+    return tree_map(lambda param: jnp.array(param), params)
