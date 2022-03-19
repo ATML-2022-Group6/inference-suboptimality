@@ -1,6 +1,6 @@
-from jax import nn
-from jax import random
+from jax import nn, random
 from jax import numpy as jnp
+from jax.scipy import stats
 from jax.example_libraries import stax
 
 from vae import HyperParams
@@ -15,7 +15,38 @@ def build_flow(hps: HyperParams):
   # indexed as 1:d, d+1:D.
   latent_split_size: int = latent_size // 2
   
-  def apply_flow(rng, z, v):
+  def sample(rng, mu, logvar, k):
+    """The forward function essentially."""
+    batch_size = mu.shape[0] # B
+    
+    eps = random.normal(rng, (k, batch_size, latent_size)) # shape: [P, B, Z]
+    z = mu + eps * jnp.exp(0.5 * logvar) # shape: [P, B, Z]
+    logqz = stats.norm.logpdf(z, loc=mu, scale=logvar) # shape: [P, B]
+    
+    z = jnp.reshape(z, newshape=(-1, latent_size)) # [P*B, Z]
+    
+    # With notation as in Dinh et al. (Real NVP paper),
+    # split z with index 1:d, d+1:D split.
+    z1, z2 = z[:, :latent_split_size], z[:, latent_split_size:]
+    
+    logdetsum = 0.
+    # TODO :- For loop on the number of flows (has to have as many 
+    # neural nets). For this implementation may need to bring current net inits
+    # `_norm_flow()` to parent function init.
+    z1, z2, logdet = _norm_flow(rng, z1, z2)
+    logdetsum += logdet
+    logdetsum = jnp.reshape(logdetsum, newshape=(k, batch_size))
+    
+    # Concatenate the z-split (might need it).
+    z = jnp.concatenate([z1, z2], axis=1)
+    z = jnp.reshape(z, newshape=(k, batch_size, latent_size))
+    
+    logpz = logqz - logdetsum
+    return logpz
+  
+  def _norm_flow(rng, z, v):
+    """Normalizing flow implementation without Auxiliary Variable.
+    Based on equation (9) and (10) in our paper Cremer et al."""
     h1_net_init, h1_net_apply = stax.serial(stax.Dense(hidden_size), stax.Tanh)
     h2_net_init, h2_net_apply = stax.serial(stax.Dense(hidden_size), stax.Tanh)
     μ1_net_init, μ1_net_apply = stax.Dense(latent_split_size)
@@ -47,5 +78,5 @@ def build_flow(hps: HyperParams):
     logdet = logdet_v + logdet_z
 
     return z, v, logdet
-  
-  return apply_flow
+    
+  return sample
