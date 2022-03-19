@@ -17,7 +17,11 @@ class HyperParams:
   act_fun: tuple = stax.Elu
 
 def log_bernoulli(logit, target):
+  # TODO: Use BCE
   return -jnp.sum(jnp.logaddexp(0., (1 - target * 2) * logit))
+
+def gaussian_kld(mu, logvar):
+  return -0.5 * jnp.sum(1. + logvar - mu**2. - jnp.exp(logvar))
 
 def build_vae(hps: HyperParams):
 
@@ -57,15 +61,11 @@ def build_vae(hps: HyperParams):
     z = mu + eps * jnp.exp(0.5 * logvar)
     logit = decoder(decoder_params, z)
 
-    logpx = log_bernoulli(logit, x) # log p(x|z)
+    likelihood = log_bernoulli(logit, x) # log p(x|z)
+    kld = gaussian_kld(mu, logvar)
+    elbo = likelihood - kld # TODO: Warmup const
 
-    logpz = jnp.sum(stats.norm.logpdf(z))    # log p(z)
-    logqz = jnp.sum(stats.norm.logpdf(eps))  # log q(z|x)    
-    kld = logqz - logpz
-
-    elbo = logpx - kld # TODO: Warmup const
-
-    return elbo, logit, logpx, logpz, logqz
+    return elbo, logit, likelihood, kld
   
   # Sample from latent space and decode
   @jit
