@@ -7,3 +7,5 @@ vae_example/tmp
 datasets/mnist.pkl
 
 mnist.pkl
+
+results
