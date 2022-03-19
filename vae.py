@@ -5,6 +5,8 @@ from jax.example_libraries import stax
 
 from dataclasses import dataclass
 
+from flow import build_flow
+
 @dataclass
 class HyperParams:
   latent_size: int = 50
@@ -12,6 +14,7 @@ class HyperParams:
   encoder_width: int = 200
   decoder_width: int = 200
   act_fun: tuple = stax.Elu
+  has_flow: bool = False
 
 def log_bernoulli(logit, target):
   # loss = -jnp.max(logit, 0) + jnp.multiply(logit, target) - jnp.log(1. + jnp.exp(-jnp.abs(logit)))
@@ -60,8 +63,13 @@ def build_vae(hps: HyperParams):
 
     logpz = jnp.sum(stats.norm.logpdf(z))    # log p(z)
     logqz = jnp.sum(stats.norm.logpdf(eps))  # log q(z|x)    
+    
+    # Normalizing flow
+    if hps.has_flow:
+      sample_flow = build_flow(hps)
+      logqz += sample_flow(rng, mu, logvar, k=1)
+    
     kld = logqz - logpz
-
     elbo = logpx - kld # TODO: Warmup const
 
     return elbo, logit, logpx, logpz, logqz
