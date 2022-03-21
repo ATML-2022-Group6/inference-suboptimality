@@ -32,6 +32,9 @@ def log_bernoulli(logit, target):
 def gaussian_kld(mu, logvar):
   return -0.5 * jnp.sum(1. + logvar - mu**2. - jnp.exp(logvar))
 
+def log_normal(x, mean, logvar):
+  return -0.5 * (jnp.sum(logvar) + jnp.sum((x - mean)**2 / jnp.exp(logvar)))
+
 def build_vae(hps: HyperParams):
 
   encoder_init, encoder = stax.serial(
@@ -72,8 +75,9 @@ def build_vae(hps: HyperParams):
 
     likelihood = log_bernoulli(logit, x) # log p(x|z)
 
-    logpz = jnp.sum(stats.norm.logpdf(z))    # log p(z)
-    logqz = jnp.sum(stats.norm.logpdf(eps))  # log q(z|x)    
+    zeros = jnp.zeros(mu.shape)
+    logpz = log_normal(z, zeros, zeros)    # log p(z)
+    logqz = log_normal(z, mu, logvar)  # log q(z|x)    
     
     # Normalizing flow
     if hps.has_flow:
