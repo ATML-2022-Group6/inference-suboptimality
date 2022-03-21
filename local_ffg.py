@@ -10,12 +10,12 @@ num_samples = 32
 opt_init, opt_update, get_params = optimizers.adam(step_size=1e-3, eps=1e-4)
 
 def loss_fn(rng, params, image):
-  elbo, _, _, _, _ = run_vae(params, image, rng=rng)
+  elbo, _, _, _= run_vae(params, image, rng=rng)
   return -elbo
 
 def iwelbo_fn(rng, params, image):
     rngs = random.split(rng, num_samples)
-    iw_log_summand, _, _, _, _ = jax.vmap(run_vae, in_axes=(None, None, 0))( params, image, rngs)
+    iw_log_summand, _, _, _ = jax.vmap(run_vae, in_axes=(None, None, 0))( params, image, rngs)
 
     K = num_samples
     iwelbo_K = logsumexp(iw_log_summand) - jnp.log(K)
@@ -31,12 +31,12 @@ def batch_loss_fn(rng, params, images):
   return jnp.mean(jax.vmap(loss_fn, in_axes=(0, None, 0))(rngs, params, images))
 
 @jit
-def run_iwelbo_epoch(epoch, rng, decoder_params, batch):
+def run_iwelbo_epoch(epoch, rng,opt_state, decoder_params, batch):
 
   def body_fn(opt_state, args):
     idx, rng, batch = args
-    params = (get_params(opt_state)[0], decoder_params)
-    loss = batch_iwelbo_fn(rng, params, batch)
+    enc_params = get_params(opt_state)
+    loss = batch_iwelbo_fn(rng, (enc_params,decoder_params), batch)
     return loss
 
   scan_args = (epoch, rng, batch)
@@ -82,21 +82,25 @@ def optimize_local_gaussian(
     opt_state = opt_init(init_params)
     rng = random.PRNGKey(0)
 
-    best_avg, sentinel, prev_seq = 999999, 0, []
+    best_avg, sentinel, train_elbo, train_iwae = 999999, 0, [], []
     # perform local opt
     time_ = time.time()
+
+    plot_elbo, plot_iwae = [], []
 
     for epoch in range(1, 999999):     
         rng, epoch_rng = random.split(rng)
         opt_state, loss = run_epoch(epoch-1, rng, opt_state, decoder_params, batch)
         
-        iw_loss = run_iwelbo_epoch(epoch-1, rng, decoder_params, batch)
+        iw_loss = run_iwelbo_epoch(epoch-1, rng,opt_state, decoder_params, batch)
 
         # if epoch % 1000 == 0:
         #   print(epoch, loss)
-        prev_seq.append(loss)
+        train_elbo.append(loss)
+        train_iwae.append(iw_loss)
         if epoch % check_every == (check_every-1):
-            last_avg = jnp.mean(jnp.array(prev_seq))
+            last_avg = jnp.mean(jnp.array(train_elbo))
+            last_avg_iwae = jnp.mean(jnp.array(train_iwae))
             if debug:  # debugging helper
                 sys.stderr.write(
                     'Epoch %d, time elapse %.4f, last avg %.4f, prev best %.4f\n' % \
@@ -108,14 +112,17 @@ def optimize_local_gaussian(
                 sentinel += 1
             if sentinel > sentinel_thres:
                 break
-            prev_seq = []
+            train_elbo = []
+            train_iwae = []
+            plot_elbo.append(-last_avg)
+            plot_iwae.append(last_avg_iwae)
             time_ = time.time()
+
 
     # evaluation
     vae_elbo = -loss
     iwae_elbo = iw_loss
-    #print(prev_seq)
-    return vae_elbo, iwae_elbo, prev_seq
+    return vae_elbo, iwae_elbo, plot_elbo, plot_iwae
 
 def local_FFG(params, z_size, batches):
     _, decoder_params = params
@@ -123,7 +130,7 @@ def local_FFG(params, z_size, batches):
     time_ = time.time()
     prev_seq = []
     for i, batch in enumerate(tqdm(batches)):
-        elbo, iwae,prev_seq = optimize_local_gaussian(log_bernoulli, decoder_params, batch)
+        elbo, iwae, _ , _ = optimize_local_gaussian(log_bernoulli, decoder_params, batch)
         vae_record.append(elbo)
         iwae_record.append(iwae)
         print ('Local opt w/ ffg, batch %d, time elapse %.4f, ELBO %.4f, IWAE %.4f' % \
@@ -134,8 +141,8 @@ def local_FFG(params, z_size, batches):
 
     print ('Finishing...')
     print ('Average ELBO %.4f, IWAE %.4f' % (np.nanmean(vae_record), np.nanmean(iwae_record)))
-    plt.plot(prev_seq)
-    print(prev_seq)
+    
 
 
-# To run: local_FFG(get_params(opt_state), 50, train_batches)
+# #To run: 
+# local_FFG(get_params(opt_state), 50, train_batches)
