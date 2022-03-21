@@ -9,16 +9,7 @@ from dataclasses import dataclass
 from flow import build_flow
 import pickle
 
-from utils import log_bernoulli, log_normal
-
-@dataclass
-class HyperParams:
-  latent_size: int = 50
-  image_size: int = 28 * 28
-  encoder_width: int = 200
-  decoder_width: int = 200
-  act_fun: tuple = stax.Elu
-  has_flow: bool = False
+from utils import log_bernoulli, log_normal, HyperParams
 
 def build_vae(hps: HyperParams):
 
