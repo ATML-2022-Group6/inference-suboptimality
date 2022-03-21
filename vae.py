@@ -67,7 +67,7 @@ def build_vae(hps: HyperParams):
     if hps.has_flow:
       flow_params = params[2]
       z, logdetsum = run_flow(z, flow_params)
-      logqz += logdetsum
+      logqz -= logdetsum
     
     # kld = gaussian_kld(mu, logvar)
     kld = logqz - logpz
@@ -77,7 +77,7 @@ def build_vae(hps: HyperParams):
   # Sample from latent space and decode
   @jit
   def sample_fun(params, rng):
-    _, decoder_params = params
+    decoder_params = params[1]
     z = random.normal(rng, (hps.latent_size,))
     logit = decoder(decoder_params, z)
     recon = 1 / (1 + jnp.exp(-logit))
