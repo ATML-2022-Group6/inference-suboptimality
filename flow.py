@@ -34,12 +34,12 @@ def build_flow(hps):
     rngs = random.split(rng, num=6)
 
     h1_size, h1_net_params = h1_net_init(rngs[0], input_shape=(latent_split_size,))
-    μ1_size, μ1_net_params = μ1_net_init(rngs[1], input_shape=(h1_size,))
-    σ1_size, σ1_net_params = σ1_net_init(rngs[2], input_shape=(h1_size,))
+    μ1_size, μ1_net_params = μ1_net_init(rngs[1], input_shape=h1_size)
+    σ1_size, σ1_net_params = σ1_net_init(rngs[2], input_shape=h1_size)
 
     h2_size, h2_net_params = h2_net_init(rngs[3], input_shape=(latent_split_size,))
-    μ2_size, μ2_net_params = μ2_net_init(rngs[4], input_shape=(h2_size,))
-    σ2_size, σ2_net_params = σ2_net_init(rngs[5], input_shape=(h2_size,))
+    μ2_size, μ2_net_params = μ2_net_init(rngs[4], input_shape=h2_size)
+    σ2_size, σ2_net_params = σ2_net_init(rngs[5], input_shape=h2_size)
 
     params = (
       h1_net_params, μ1_net_params, σ1_net_params,
