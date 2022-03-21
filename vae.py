@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from flow import build_flow
 import pickle
 
+from utils import log_bernoulli, log_normal
+
 @dataclass
 class HyperParams:
   latent_size: int = 50
@@ -17,23 +19,6 @@ class HyperParams:
   decoder_width: int = 200
   act_fun: tuple = stax.Elu
   has_flow: bool = False
-
-def log_bernoulli(logit, target):
-  # Numerically equivalent to Binary Cross Entropy loss (TODO: How?)
-  bce_loss = jnp.maximum(logit, 0.) - logit * target + jnp.logaddexp(0., -jnp.abs(logit))
-  return -jnp.sum(bce_loss)
-
-# Equivalent to below
-# def log_sigmoid(x):
-#   return -jnp.logaddexp(0, -x)
-# def bce(logit, target):
-#   return jnp.sum( target * log_sigmoid(logit) + (1 - target) * log_sigmoid(-logit) )
-
-def gaussian_kld(mu, logvar):
-  return -0.5 * jnp.sum(1. + logvar - mu**2. - jnp.exp(logvar))
-
-def log_normal(x, mean, logvar):
-  return -0.5 * (jnp.sum(logvar) + jnp.sum((x - mean)**2 / jnp.exp(logvar)))
 
 def build_vae(hps: HyperParams):
 
@@ -51,22 +36,30 @@ def build_vae(hps: HyperParams):
     stax.Dense(hps.decoder_width), hps.act_fun,
     stax.Dense(hps.image_size),
   )
+  init_flow, run_flow = build_flow(hps)
 
   def init_fun(rng, input_shape):
     assert input_shape[-1] == hps.image_size
 
-    encoder_rng, decoder_rng = random.split(rng)
+    encoder_rng, decoder_rng, flow_rng = random.split(rng, num=3)
+
     _, encoder_params = encoder_init(encoder_rng, input_shape=input_shape)
 
     decoder_input_shape = input_shape[:-1] + (hps.latent_size,)
     output_shape, decoder_params = decoder_init(decoder_rng, input_shape=decoder_input_shape)
 
-    params = (encoder_params, decoder_params)
+    if hps.has_flow:
+      flow_params = init_flow(flow_rng)
+      params = (encoder_params, decoder_params, flow_params)
+    else:
+      params = (encoder_params, decoder_params)
+
     return params
   
   @jit
   def apply_fun(params, x, rng):
-    encoder_params, decoder_params = params
+    encoder_params = params[0]
+    decoder_params = params[1]
 
     mu, logvar = encoder(encoder_params, x)
     eps = random.normal(rng, mu.shape)
@@ -81,8 +74,9 @@ def build_vae(hps: HyperParams):
     
     # Normalizing flow
     if hps.has_flow:
-      sample_flow = build_flow(hps)
-      logqz += sample_flow(rng, mu, logvar, k=1)
+      flow_params = params[2]
+      z, logdetsum = run_flow(z, params)
+      logqz += logdetsum
     
     # kld = gaussian_kld(mu, logvar)
     kld = logqz - logpz
