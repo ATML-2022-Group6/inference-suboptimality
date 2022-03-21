@@ -83,7 +83,25 @@ def build_vae(hps: HyperParams):
     recon = 1 / (1 + jnp.exp(-logit))
     return recon
   
-  return init_fun, apply_fun, sample_fun
+  @jit
+  def apply_local(rng, x, mu, logvar, decoder_params):
+
+    eps = random.normal(rng, mu.shape)
+    z = mu + eps * jnp.exp(0.5 * logvar)
+    logit = decoder(decoder_params, z)
+
+    likelihood = log_bernoulli(logit, x) # log p(x|z)
+
+    zeros = jnp.zeros(mu.shape)
+    logpz = log_normal(z, zeros, zeros)    # log p(z)
+    logqz = log_normal(z, mu, logvar)  # log q(z|x)    
+    
+    # kld = gaussian_kld(mu, logvar)
+    kld = logqz - logpz
+    elbo = likelihood - kld # TODO: Warmup const
+    return elbo, logit, likelihood, kld
+  
+  return init_fun, apply_fun, apply_local, sample_fun
 
 def save_params(file_name, params):
   with open(file_name, "wb") as f:
