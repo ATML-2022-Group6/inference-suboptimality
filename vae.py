@@ -2,12 +2,8 @@ from jax import lax, random, jit
 from jax import numpy as jnp
 from jax.scipy import stats
 from jax.example_libraries import stax
-from jax.tree_util import tree_map
-
-from dataclasses import dataclass
 
 from flow import build_flow
-import pickle
 
 from utils import log_bernoulli, log_normal, HyperParams
 
@@ -102,13 +98,3 @@ def build_vae(hps: HyperParams):
     return elbo, logit, likelihood, kld
   
   return init_fun, apply_fun, apply_local, sample_fun
-
-def save_params(file_name, params):
-  with open(file_name, "wb") as f:
-    pickle.dump(params, f)
-
-def load_params(file_name):
-  with open(file_name, "rb") as f:
-    params = pickle.load(f)
-    # convert NP arrays to Jax arrays
-    return tree_map(lambda param: jnp.array(param), params)

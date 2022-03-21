@@ -3,6 +3,9 @@ from jax.example_libraries import stax
 
 from dataclasses import dataclass
 
+from jax.tree_util import tree_map
+import pickle
+
 @dataclass
 class HyperParams:
   latent_size: int = 50
@@ -28,3 +31,13 @@ def gaussian_kld(mu, logvar):
 
 def log_normal(x, mean, logvar):
   return -0.5 * (jnp.sum(logvar) + jnp.sum((x - mean)**2 / jnp.exp(logvar)))
+
+def save_params(file_name, params):
+  with open(file_name, "wb") as f:
+    pickle.dump(params, f)
+
+def load_params(file_name):
+  with open(file_name, "rb") as f:
+    params = pickle.load(f)
+    # convert NP arrays to Jax arrays
+    return tree_map(lambda param: jnp.array(param), params)
