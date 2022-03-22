@@ -55,8 +55,7 @@ def build_vae(hps: HyperParams):
 
     likelihood = log_bernoulli(logit, x) # log p(x|z)
 
-    zeros = jnp.zeros(mu.shape)
-    logpz = log_normal(z, zeros, zeros)    # log p(z)
+    logpz = log_normal(z)    # log p(z)
     logqz = log_normal(z, mu, logvar)  # log q(z|x)    
     
     # Normalizing flow
@@ -88,8 +87,7 @@ def build_vae(hps: HyperParams):
 
     likelihood = log_bernoulli(logit, x) # log p(x|z)
 
-    zeros = jnp.zeros(mu.shape)
-    logpz = log_normal(z, zeros, zeros)    # log p(z)
+    logpz = log_normal(z)    # log p(z)
     logqz = log_normal(z, mu, logvar)  # log q(z|x)    
     
     # kld = gaussian_kld(mu, logvar)
