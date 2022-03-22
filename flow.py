@@ -18,8 +18,8 @@ def build_aux_flow(hps: HyperParams):
   latent_split_size: int = latent_size // 2
 
   # Nets for `_norm_flow()` method; eq. (9) and (10) in Cremer et al.
-  h1_net_init, h1_net = stax.serial(stax.Dense(hidden_size), stax.Tanh)
-  h2_net_init, h2_net = stax.serial(stax.Dense(hidden_size), stax.Tanh)
+  h1_net_init, h1_net = stax.serial(stax.Dense(hidden_size), stax.Elu)
+  h2_net_init, h2_net = stax.serial(stax.Dense(hidden_size), stax.Elu)
   μ1_net_init, μ1_net = stax.Dense(latent_split_size)
   μ2_net_init, μ2_net = stax.Dense(latent_split_size)
   σ1_net_init, σ1_net = stax.Dense(latent_split_size)
@@ -64,6 +64,8 @@ def build_aux_flow(hps: HyperParams):
     norm_flow_params, aux_var_params = params
     
     # Auxiliary variable: q(v0)
+    # IMPLEMENTATION COMMENTS :- Cremer initialized mu, logvar with zeros
+    # whereas Xuechen get mu, logvar from net transformations on z0.
     mu, logvar = jnp.zeros(latent_size), jnp.zeros(latent_size)
     eps = random.normal(rng, mu.shape)
     v0 = mu + eps*jnp.exp(0.5 * logvar)
@@ -97,13 +99,32 @@ def build_aux_flow(hps: HyperParams):
       σ2_net_params,
     ) = params
     
-    # Equation (9) in paper.
+    # Our flow's affine coupling procedure (modulo indexing).
+    #
+    #               z
+    #             /   \
+    #          z_1    z_2
+    #          /       |
+    #        h_1       | 
+    #       /   \      |
+    #      μ_1   σ_1   |   
+    #       |     |    |
+    #      z_2•σ_1 + μ_1 -> z_2' (eq. 9)
+    #                        |
+    #                       h_2  
+    #                      /   \
+    #                    μ_2   σ_2
+    #                     |     |
+    #                z_1•σ_2 + μ_2 -> z_1' (eq. 10)
+    #
+    
+    # Equation (9) in paper. No difference doing z_1 or z_2 first in the coupling.
     h1 = h1_net(h1_net_params, z)
     μ1 = μ1_net(μ1_net_params, h1)
     logit_1 = σ1_net(σ1_net_params, h1)
     v = v*nn.sigmoid(logit_1) + μ1  # TODO :- Add nn.elu to μ1 and multiply with `grad_fn(z)`.
 
-    # Equation (10) in paper.
+    # Equation (10) in paper. No difference doing z_1 or z_2 first in the coupling.
     h2 = h2_net(h2_net_params, v)
     μ2 = μ2_net(μ2_net_params, h2)
     logit_2 = σ2_net(σ2_net_params, h2)
@@ -141,15 +162,8 @@ def build_flow(hps: HyperParams):
   # indexed as 1:d, d+1:D.
   latent_split_size: int = latent_size // 2
 
-  #              z
-  #          z_1    z_2
-  #      h_1         h_2
-  #     /   \       /   \
-  #    u1   o1     u2    o2
-  #       
-
-  h1_net_init, h1_net = stax.serial(stax.Dense(hidden_size), stax.Tanh)
-  h2_net_init, h2_net = stax.serial(stax.Dense(hidden_size), stax.Tanh)
+  h1_net_init, h1_net = stax.serial(stax.Dense(hidden_size), stax.Elu)
+  h2_net_init, h2_net = stax.serial(stax.Dense(hidden_size), stax.Elu)
   μ1_net_init, μ1_net = stax.Dense(latent_split_size)
   μ2_net_init, μ2_net = stax.Dense(latent_split_size)
   σ1_net_init, σ1_net = stax.Dense(latent_split_size)
@@ -216,13 +230,32 @@ def build_flow(hps: HyperParams):
       σ2_net_params,
     ) = params
     
-    # Equation (9) in paper.
+    # Our flow's affine coupling procedure (modulo indexing).
+    #
+    #               z
+    #             /   \
+    #          z_1    z_2
+    #          /       |
+    #        h_1       | 
+    #       /   \      |
+    #      μ_1   σ_1   |   
+    #       |     |    |
+    #      z_2•σ_1 + μ_1 -> z_2' (eq. 9)
+    #                        |
+    #                       h_2  
+    #                      /   \
+    #                    μ_2   σ_2
+    #                     |     |
+    #                z_1•σ_2 + μ_2 -> z_1' (eq. 10)
+    #
+    
+    # Equation (9) in paper. No difference doing z_1 or z_2 first in the coupling.
     h1 = h1_net(h1_net_params, z)
     μ1 = μ1_net(μ1_net_params, h1)
     logit_1 = σ1_net(σ1_net_params, h1)
     v = v*nn.sigmoid(logit_1) + μ1  # TODO :- Add nn.elu to μ1 and multiply with `grad_fn(z)`.
 
-    # Equation (10) in paper.
+    # Equation (10) in paper. No difference doing z_1 or z_2 first in the coupling.
     h2 = h2_net(h2_net_params, v)
     μ2 = μ2_net(μ2_net_params, h2)
     logit_2 = σ2_net(σ2_net_params, h2)
