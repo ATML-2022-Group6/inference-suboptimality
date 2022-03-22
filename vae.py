@@ -44,7 +44,7 @@ def build_vae(hps: HyperParams):
     return params
   
   @jit
-  def apply_fun(params, x, rng):
+  def apply_fun(params, x, rng, beta=1.):
     encoder_params = params[0]
     decoder_params = params[1]
 
@@ -67,7 +67,7 @@ def build_vae(hps: HyperParams):
     logit = decoder(decoder_params, z)
     likelihood = log_bernoulli(logit, x) # log p(x|z)
     
-    elbo = likelihood - kld # TODO: Warmup const
+    elbo = likelihood - beta * kld 
     return elbo, logit, likelihood, kld
   
   # Sample from latent space and decode
@@ -93,7 +93,7 @@ def build_vae(hps: HyperParams):
     
     # kld = gaussian_kld(mu, logvar)
     kld = logqz - logpz
-    elbo = likelihood - kld # TODO: Warmup const
+    elbo = likelihood - kld
     return elbo, logit, likelihood, kld
   
   return init_fun, apply_fun, apply_local, sample_fun
