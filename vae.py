@@ -51,21 +51,22 @@ def build_vae(hps: HyperParams):
     mu, logvar = encoder(encoder_params, x)
     eps = random.normal(rng, mu.shape)
     z = mu + eps * jnp.exp(0.5 * logvar)
-    logit = decoder(decoder_params, z)
 
-    likelihood = log_bernoulli(logit, x) # log p(x|z)
-
-    logpz = log_normal(z)    # log p(z)
     logqz = log_normal(z, mu, logvar)  # log q(z|x)    
-    
+
     # Normalizing flow
     if hps.has_flow:
       flow_params = params[2]
       z, logdetsum = run_flow(z, flow_params)
       logqz -= logdetsum
-    
+
+    logpz = log_normal(z)    # log p(z)
     # kld = gaussian_kld(mu, logvar)
     kld = logqz - logpz
+
+    logit = decoder(decoder_params, z)
+    likelihood = log_bernoulli(logit, x) # log p(x|z)
+    
     elbo = likelihood - kld # TODO: Warmup const
     return elbo, logit, likelihood, kld
   
