@@ -61,7 +61,7 @@ def build_aux_flow(hps: HyperParams):
     stax.parallel(
       stax.Dense(latent_size),
       stax.Dense(latent_size),
-    )
+    ),
   )
   # Reversible model: r(v|x, z)
   rv_net_init, rv_net = stax.serial(
@@ -71,7 +71,7 @@ def build_aux_flow(hps: HyperParams):
     stax.parallel(
       stax.Dense(latent_size),
       stax.Dense(latent_size),
-    )
+    ),
   )
   
   def init_fun(rng):
@@ -109,9 +109,11 @@ def build_aux_flow(hps: HyperParams):
     ) = aux_var_params
     
     # Auxiliary variable, forward distribution: q(v0)
+    #
     # IMPLEMENTATION CONFLICTS :- Cremer initialized mu, logvar with zeros
     # whereas Xuechen get mu, logvar from net transformations on z0.
-    mean_v0, logvar_v0 = qv_net(qv_net_params, z0)  
+    # mean_v0, logvar_v0 = qv_net(qv_net_params, z0) # Xuechen's method
+    mean_v0, logvar_v0 = jnp.zeros(latent_size), jnp.zeros(latent_size)  # Cremer's method
     eps = random.normal(rng, mean_v0.shape)
     v0 = mean_v0 + eps*jnp.exp(0.5 * logvar_v0)
     logqv0 = log_normal(v0, mean_v0, logvar_v0)
