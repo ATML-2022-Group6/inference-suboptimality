@@ -1,12 +1,15 @@
 from vae import log_bernoulli #, log_mean_exp, safe_repeat
 from jax.example_libraries import stax
 import torch.optim as optim
-from jax import jit
 from jax.scipy.special import logsumexp
 import time
 from jax.scipy import stats
+
 from jax.example_libraries import optimizers
 from tqdm.notebook import tqdm, trange
+from jax import jit
+from jax import random
+import jax
 
 num_samples = 32
 
