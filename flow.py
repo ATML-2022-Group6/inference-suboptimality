@@ -53,6 +53,17 @@ def build_aux_flow(hps: HyperParams):
   )
   
   # Nets for `sample()` method.
+  # Forward model: q(v|x, z)
+  qv_net_init, qv_net = stax.serial(
+    stax.Dense(hidden_size), stax.Elu,
+    stax.Dense(hidden_size), stax.Elu,
+    stax.FanOut(2),
+    stax.parallel(
+      stax.Dense(latent_size),
+      stax.Dense(latent_size),
+    )
+  )
+  # Reversible model: r(v|x, z)
   rv_net_init, rv_net = stax.serial(
     stax.Dense(hidden_size), stax.Elu,
     stax.Dense(hidden_size), stax.Elu,
@@ -64,7 +75,7 @@ def build_aux_flow(hps: HyperParams):
   )
   
   def init_fun(rng):
-    rngs = random.split(rng, num=4)
+    rngs = random.split(rng, num=6)
 
     # Flow procedure.
     _, flow1_net1_params = flow1_net1_init(rngs[0], input_shape=(latent_size,))
@@ -73,14 +84,18 @@ def build_aux_flow(hps: HyperParams):
     _, flow2_net2_params = flow2_net2_init(rngs[3], input_shape=(latent_size,))
     
     # Auxiliary variable procedure.
-    _, rv_net_params = rv_net_init(rngs[4], input_shape=(2*latent_size,))
+    _, qv_net_params = qv_net_init(rngs[4], input_shape=(2*latent_size,))
+    _, rv_net_params = rv_net_init(rngs[5], input_shape=(2*latent_size,))
 
     params = (
       (
-        (flow1_net1_params, flow1_net2_params)
-        (flow2_net1_params, flow2_net2_params)
+        (flow1_net1_params, flow1_net2_params),
+        (flow2_net1_params, flow2_net2_params),
       ),
-      rv_net_params,
+      (
+        qv_net_params, 
+        rv_net_params,
+      ),
     )
 
     return params
@@ -88,14 +103,18 @@ def build_aux_flow(hps: HyperParams):
   def sample(rng, z0, params):
     """The forward function essentially."""
     norm_flow_params, aux_var_params = params
+    (
+      qv_net_params, 
+      rv_net_params,
+    ) = aux_var_params
     
-    # Auxiliary variable: q(v0)
-    # IMPLEMENTATION COMMENTS :- Cremer initialized mu, logvar with zeros
+    # Auxiliary variable, forward distribution: q(v0)
+    # IMPLEMENTATION CONFLICTS :- Cremer initialized mu, logvar with zeros
     # whereas Xuechen get mu, logvar from net transformations on z0.
-    mu, logvar = jnp.zeros(latent_size), jnp.zeros(latent_size)
-    eps = random.normal(rng, mu.shape)
-    v0 = mu + eps*jnp.exp(0.5 * logvar)
-    logqv0 = log_normal(v0, mu, logvar)
+    mean_v0, logvar_v0 = qv_net(qv_net_params, z0)  
+    eps = random.normal(rng, mean_v0.shape)
+    v0 = mean_v0 + eps*jnp.exp(0.5 * logvar_v0)
+    logqv0 = log_normal(v0, mean_v0, logvar_v0)
     
     # Flow procedure. Currently fixed to 2 flows only.
     zT, vT, logdet_flow1 = _norm_flow(z0, v0, 
@@ -107,7 +126,7 @@ def build_aux_flow(hps: HyperParams):
     inverse_logdet_sum = -(logdet_flow1 + logdet_flow2)
     
     # Reverse distribution: r(vT|x,zT).
-    logrvT = _aux_var(aux_var_params, zT, vT)
+    logrvT = _reverse_aux_var(rv_net_params, zT, vT)
     
     # Auxiliary flow correction to log q(z|x).
     logprob = logqv0 + inverse_logdet_sum - logrvT
@@ -158,13 +177,12 @@ def build_aux_flow(hps: HyperParams):
 
     return z, v, logdet
   
-  def _aux_var(zT, vT, params):
-    """Auxiliary variable procedure."""
+  def _reverse_aux_var(zT, vT, params):
+    """Reverse model in auxiliary variable procedure."""
     rv_net_params = params
     
     mean_vT, logvar_vT = rv_net(rv_net_params, zT)
     logrvT = log_normal(vT, mean_vT, logvar_vT)
-    
     return logrvT
     
   return init_fun, sample
