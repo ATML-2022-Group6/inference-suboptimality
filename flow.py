@@ -84,8 +84,8 @@ def build_aux_flow(hps: HyperParams):
     _, flow2_net2_params = flow2_net2_init(rngs[3], input_shape=(latent_size,))
     
     # Auxiliary variable procedure.
-    _, qv_net_params = qv_net_init(rngs[4], input_shape=(2*latent_size,))
-    _, rv_net_params = rv_net_init(rngs[5], input_shape=(2*latent_size,))
+    _, qv_net_params = qv_net_init(rngs[4], input_shape=(latent_size,))
+    _, rv_net_params = rv_net_init(rngs[5], input_shape=(latent_size,))
 
     params = (
       (
@@ -120,13 +120,13 @@ def build_aux_flow(hps: HyperParams):
     zT, vT, logdet_flow1 = _norm_flow(z0, v0, 
                                       norm_flow_params[0], 
                                       flow_nets[0])
-    zT, vT, logdet_flow2 = _norm_flow(zT, vT, 
+    zT, vT, logdet_flow2 = _norm_flow(zT, vT,
                                       norm_flow_params[1], 
                                       flow_nets[1])
     inverse_logdet_sum = -(logdet_flow1 + logdet_flow2)
     
     # Reverse distribution: r(vT|x,zT).
-    logrvT = _reverse_aux_var(rv_net_params, zT, vT)
+    logrvT = _reverse_aux_var(zT, vT, rv_net_params)
     
     # Auxiliary flow correction to log q(z|x).
     logprob = logqv0 + inverse_logdet_sum - logrvT
@@ -235,7 +235,7 @@ def build_flow(hps: HyperParams):
 
     return params
   
-  def sample(z0, params):
+  def sample(rng, z0, params):
     """The forward function essentially."""
     
     # With notation as in Dinh et al. (Real NVP paper),
