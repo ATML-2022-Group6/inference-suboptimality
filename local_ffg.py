@@ -4,6 +4,7 @@ import torch.optim as optim
 from jax.scipy.special import logsumexp
 import time
 from jax.scipy import stats
+from jax.example_libraries import optimizers
 
 num_samples = 32
 
