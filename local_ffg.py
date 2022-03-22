@@ -1,6 +1,7 @@
 from vae import log_bernoulli #, log_mean_exp, safe_repeat
 from jax.example_libraries import stax
 import torch.optim as optim
+from jax import jit
 from jax.scipy.special import logsumexp
 import time
 from jax.scipy import stats
