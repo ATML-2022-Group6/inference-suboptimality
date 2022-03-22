@@ -6,6 +6,12 @@ import time
 from jax.scipy import stats
 from jax import numpy as jnp
 
+from jax.example_libraries import optimizers
+from tqdm.notebook import tqdm, trange
+from jax import jit
+from jax import random
+import jax
+
 num_samples = 32
 
 opt_init, opt_update, get_params = optimizers.adam(step_size=1e-3, eps=1e-4)
