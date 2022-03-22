@@ -6,6 +6,7 @@ from jax.scipy.special import logsumexp
 import time
 from jax.scipy import stats
 from jax.example_libraries import optimizers
+from tqdm.notebook import tqdm, trange
 
 num_samples = 32
 
