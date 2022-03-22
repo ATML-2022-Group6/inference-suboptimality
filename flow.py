@@ -7,7 +7,7 @@ from jax.example_libraries import stax
 from utils import HyperParams, log_normal
 
 def build_aux_flow(hps: HyperParams):
-  """Cremer's version of Real-NVP (Dinh et al.) + auxiliary variable."""
+  """Normalizing flow + auxiliary variable."""
   n_flows: int = 1
   hidden_size: int = 50
   latent_size: int = hps.latent_size
@@ -83,20 +83,10 @@ def build_aux_flow(hps: HyperParams):
     logprob = logqv0 - logdetsum - logrvT
     return zT, logprob
   
-  def _aux_var(params, zT, vT):
-    """Auxiliary variable procedure."""
-    rv_net_params = params
-    
-    out = rv_net(rv_net_params, zT)
-    mean_vT, logvar_vT = out[:latent_size], out[latent_size:]
-    logrvT = log_normal(vT, mean_vT, logvar_vT)
-    
-    return logrvT
-  
   def _norm_flow(params, z, v):
     """
-    Normalizing flow as defined by equation (9) and (10) in our 
-    paper Cremer et al.
+    Real-NVP (Dinh et al.) normalizing flow as defined 
+    by equation (9) and (10) in our paper Cremer et al.
     """
     (
       h1_net_params, 
@@ -124,6 +114,16 @@ def build_aux_flow(hps: HyperParams):
     logdet = logdet_v + logdet_z
 
     return z, v, logdet
+  
+  def _aux_var(params, zT, vT):
+    """Auxiliary variable procedure."""
+    rv_net_params = params
+    
+    out = rv_net(rv_net_params, zT)
+    mean_vT, logvar_vT = out[:latent_size], out[latent_size:]
+    logrvT = log_normal(vT, mean_vT, logvar_vT)
+    
+    return logrvT
     
   return init_fun, sample
 
@@ -170,6 +170,15 @@ def build_flow(hps: HyperParams):
       h1_net_params, μ1_net_params, σ1_net_params,
       h2_net_params, μ2_net_params, σ2_net_params
     )
+    
+    params = (
+      h1_net_params, 
+      μ1_net_params, 
+      σ1_net_params,
+      h2_net_params, 
+      μ2_net_params, 
+      σ2_net_params,
+    )
 
     return params
   
@@ -194,12 +203,17 @@ def build_flow(hps: HyperParams):
     return z, logdetsum
   
   def _norm_flow(params, z, v):
-    """Normalizing flow implementation without Auxiliary Variable.
-    Based on equation (9) and (10) in our paper Cremer et al."""
-
+    """
+    Real-NVP (Dinh et al.) normalizing flow as defined 
+    by equation (9) and (10) in our paper Cremer et al.
+    """
     (
-      h1_net_params, μ1_net_params, σ1_net_params,
-      h2_net_params, μ2_net_params, σ2_net_params
+      h1_net_params, 
+      μ1_net_params, 
+      σ1_net_params,
+      h2_net_params, 
+      μ2_net_params, 
+      σ2_net_params,
     ) = params
     
     # Equation (9) in paper.
