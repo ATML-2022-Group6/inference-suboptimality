@@ -7,12 +7,14 @@ from utils import HyperParams, log_normal
 
 def build_aux_flow(hps: HyperParams):
   """Normalizing flow + auxiliary variable."""
-  n_flows: int = 2
   hidden_size: int = 50
   latent_size: int = hps.latent_size
 
   # Nets for `_norm_flow()` method; eq. (9) and (10) in Cremer et al.
-  net1_init, net1 = stax.serial(
+  #
+  # TODO :- Make it for-loop-able, but not sure how to do it the jax way.
+  #         Current implementation is fixed for 2 flows only.
+  flow1_net1_init, flow1_net1 = stax.serial(
     stax.Dense(hidden_size), stax.Elu, # --> h
     stax.FanOut(2),
     stax.parallel(
@@ -20,13 +22,34 @@ def build_aux_flow(hps: HyperParams):
       stax.Dense(latent_size), # ---> logit
     ),
   )
-  net2_init, net2 = stax.serial(
+  flow1_net2_init, flow1_net2 = stax.serial(
     stax.Dense(hidden_size), stax.Elu, # --> h 
     stax.FanOut(2),
     stax.parallel(
       stax.Dense(latent_size), # ---> μ
       stax.Dense(latent_size), # ---> logit
     ),
+  )
+  flow2_net1_init, flow2_net1 = stax.serial(
+    stax.Dense(hidden_size), stax.Elu, # --> h
+    stax.FanOut(2),
+    stax.parallel(
+      stax.Dense(latent_size), # ---> μ
+      stax.Dense(latent_size), # ---> logit
+    ),
+  )
+  flow2_net2_init, flow2_net2 = stax.serial(
+    stax.Dense(hidden_size), stax.Elu, # --> h 
+    stax.FanOut(2),
+    stax.parallel(
+      stax.Dense(latent_size), # ---> μ
+      stax.Dense(latent_size), # ---> logit
+    ),
+  )
+  
+  flow_nets = (
+    (flow1_net1, flow1_net2),
+    (flow2_net1, flow2_net2),
   )
   
   # Nets for `sample()` method.
@@ -41,16 +64,21 @@ def build_aux_flow(hps: HyperParams):
   )
   
   def init_fun(rng):
-    rngs = random.split(rng, num=3)
+    rngs = random.split(rng, num=4)
 
-    _, net1_params = net1_init(rngs[0], input_shape=(latent_size,))
-    _, net2_params = net2_init(rngs[1], input_shape=(latent_size,))
-    _, rv_net_params = rv_net_init(rngs[2], input_shape=(2*latent_size,))
+    # Flow procedure.
+    _, flow1_net1_params = flow1_net1_init(rngs[0], input_shape=(latent_size,))
+    _, flow1_net2_params = flow1_net2_init(rngs[1], input_shape=(latent_size,))
+    _, flow2_net1_params = flow2_net1_init(rngs[2], input_shape=(latent_size,))
+    _, flow2_net2_params = flow2_net2_init(rngs[3], input_shape=(latent_size,))
+    
+    # Auxiliary variable procedure.
+    _, rv_net_params = rv_net_init(rngs[4], input_shape=(2*latent_size,))
 
     params = (
       (
-        net1_params,
-        net2_params,
+        (flow1_net1_params, flow1_net2_params)
+        (flow2_net1_params, flow2_net2_params)
       ),
       rv_net_params,
     )
@@ -69,30 +97,31 @@ def build_aux_flow(hps: HyperParams):
     v0 = mu + eps*jnp.exp(0.5 * logvar)
     logqv0 = log_normal(v0, mu, logvar)
     
-    # Flow procedure
-    logdetsum = 0.
-    # TODO :- For loop on the number of flows (has to have as many 
-    # neural nets). For this implementation may need to bring current net inits
-    # `_norm_flow()` to parent function init.
-    zT, vT, logdet = _norm_flow(norm_flow_params, z0, v0)
-    logdetsum += logdet
+    # Flow procedure. Currently fixed to 2 flows only.
+    zT, vT, logdet_flow1 = _norm_flow(z0, v0, 
+                                      norm_flow_params[0], 
+                                      flow_nets[0])
+    zT, vT, logdet_flow2 = _norm_flow(zT, vT, 
+                                      norm_flow_params[1], 
+                                      flow_nets[1])
+    inverse_logdet_sum = -(logdet_flow1 + logdet_flow2)
     
-    # Reverse distribution: r(vT|x,zT)
+    # Reverse distribution: r(vT|x,zT).
     logrvT = _aux_var(aux_var_params, zT, vT)
     
     # Auxiliary flow correction to log q(z|x).
-    logprob = logqv0 - logdetsum - logrvT
+    logprob = logqv0 + inverse_logdet_sum - logrvT
+    
     return zT, logprob
   
-  def _norm_flow(params, z, v):
+  def _norm_flow(z, v, params, nets):
     """
     Real-NVP (Dinh et al.) normalizing flow as defined 
     by equation (9) and (10) in our paper Cremer et al.
     """
-    (
-      net1_params,
-      net2_params,
-    ) = params
+
+    net1_params, net2_params = params
+    net1, net2 = nets
     
     # Our flow's affine coupling procedure (modulo indexing).
     #
@@ -129,7 +158,7 @@ def build_aux_flow(hps: HyperParams):
 
     return z, v, logdet
   
-  def _aux_var(params, zT, vT):
+  def _aux_var(zT, vT, params):
     """Auxiliary variable procedure."""
     rv_net_params = params
     
