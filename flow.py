@@ -1,29 +1,23 @@
-from dataclasses import dataclass
-from jax import nn, random, jit
+from jax.experimental import loops
+from jax import nn, random, lax
 from jax import numpy as jnp
-from jax.scipy import stats
 from jax.example_libraries import stax
 
 from utils import HyperParams, log_normal
 
 def build_aux_flow(hps: HyperParams):
   """Normalizing flow + auxiliary variable."""
-  n_flows: int = 1
+  n_flows: int = 2
   hidden_size: int = 50
   latent_size: int = hps.latent_size
-  
-  # With notation as in Dinh et al. (Real NVP paper),
-  # `latent_split_size` = D//2 where the latent variable z is 
-  # indexed as 1:d, d+1:D.
-  latent_split_size: int = latent_size // 2
 
   # Nets for `_norm_flow()` method; eq. (9) and (10) in Cremer et al.
   h1_net_init, h1_net = stax.serial(stax.Dense(hidden_size), stax.Elu)
   h2_net_init, h2_net = stax.serial(stax.Dense(hidden_size), stax.Elu)
-  μ1_net_init, μ1_net = stax.Dense(latent_split_size)
-  μ2_net_init, μ2_net = stax.Dense(latent_split_size)
-  σ1_net_init, σ1_net = stax.Dense(latent_split_size)
-  σ2_net_init, σ2_net = stax.Dense(latent_split_size)
+  μ1_net_init, μ1_net = stax.Dense(latent_size)
+  μ2_net_init, μ2_net = stax.Dense(latent_size)
+  σ1_net_init, σ1_net = stax.Dense(latent_size)
+  σ2_net_init, σ2_net = stax.Dense(latent_size)
   
   # Nets for `sample()` method.
   rv_net_init, rv_net = stax.serial(
@@ -35,11 +29,11 @@ def build_aux_flow(hps: HyperParams):
   def init_fun(rng):
     rngs = random.split(rng, num=7)
 
-    h1_size, h1_net_params = h1_net_init(rngs[0], input_shape=(latent_split_size,))
+    h1_size, h1_net_params = h1_net_init(rngs[0], input_shape=(latent_size,))
     _, μ1_net_params = μ1_net_init(rngs[1], input_shape=h1_size)
     _, σ1_net_params = σ1_net_init(rngs[2], input_shape=h1_size)
 
-    h2_size, h2_net_params = h2_net_init(rngs[3], input_shape=(latent_split_size,))
+    h2_size, h2_net_params = h2_net_init(rngs[3], input_shape=(latent_size,))
     _, μ2_net_params = μ2_net_init(rngs[4], input_shape=h2_size)
     _, σ2_net_params = σ2_net_init(rngs[5], input_shape=h2_size)
 
