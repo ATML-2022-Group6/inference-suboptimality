@@ -3,7 +3,7 @@ from jax import numpy as jnp
 from jax.scipy import stats
 from jax.example_libraries import stax
 
-from flow import build_flow
+from flow import build_flow, build_aux_flow
 
 from utils import log_bernoulli, log_normal, HyperParams
 
@@ -23,7 +23,7 @@ def build_vae(hps: HyperParams):
     stax.Dense(hps.decoder_width), hps.act_fun,
     stax.Dense(hps.image_size),
   )
-  init_flow, run_flow = build_flow(hps)
+  init_flow, run_flow = build_aux_flow(hps)
 
   def init_fun(rng, input_shape):
     assert input_shape[-1] == hps.image_size
@@ -47,9 +47,11 @@ def build_vae(hps: HyperParams):
   def apply_fun(params, x, rng, beta=1.):
     encoder_params = params[0]
     decoder_params = params[1]
+    
+    eps_rng, run_flow_rng = random.split(rng, num=2)
 
     mu, logvar = encoder(encoder_params, x)
-    eps = random.normal(rng, mu.shape)
+    eps = random.normal(eps_rng, mu.shape)
     z = mu + eps * jnp.exp(0.5 * logvar)
 
     logqz = log_normal(z, mu, logvar)  # log q(z|x)    
@@ -57,8 +59,8 @@ def build_vae(hps: HyperParams):
     # Normalizing flow
     if hps.has_flow:
       flow_params = params[2]
-      z, logdetsum = run_flow(z, flow_params)
-      logqz -= logdetsum
+      z, logprob = run_flow(run_flow_rng, z, flow_params)
+      logqz += logprob
 
     logpz = log_normal(z)    # log p(z)
     # kld = gaussian_kld(mu, logvar)
