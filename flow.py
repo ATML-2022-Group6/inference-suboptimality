@@ -33,7 +33,11 @@ def build_aux_flow(hps: HyperParams):
   rv_net_init, rv_net = stax.serial(
     stax.Dense(hidden_size), stax.Elu,
     stax.Dense(hidden_size), stax.Elu,
-    stax.Dense(2*latent_size),  # Twice the size so we can split into mean & logvar resp.
+    stax.FanOut(2),
+    stax.parallel(
+      stax.Dense(latent_size),
+      stax.Dense(latent_size),
+    )
   )
   
   def init_fun(rng):
@@ -129,8 +133,7 @@ def build_aux_flow(hps: HyperParams):
     """Auxiliary variable procedure."""
     rv_net_params = params
     
-    out = rv_net(rv_net_params, zT)
-    mean_vT, logvar_vT = out[:latent_size], out[latent_size:]
+    mean_vT, logvar_vT = rv_net(rv_net_params, zT)
     logrvT = log_normal(vT, mean_vT, logvar_vT)
     
     return logrvT
