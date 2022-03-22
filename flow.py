@@ -82,6 +82,7 @@ def build_aux_flow(hps: HyperParams):
     # Reverse distribution: r(vT|x,zT)
     logrvT = _aux_var(aux_var_params, zT, vT)
     
+    # Auxiliary flow correction to log q(z|x).
     logprob = logqv0 - logdetsum - logrvT
     return zT, logprob
   
@@ -214,7 +215,10 @@ def build_flow(hps: HyperParams):
     # Concatenate the 1:d, d+1:D z-split (will need for aux flow!).
     z = jnp.concatenate([z1, z2], axis=0)
     
-    return z, logdetsum
+    # Flow correction to log q(z|x).
+    logprob = -logdetsum
+    
+    return z, logprob
   
   def _norm_flow(params, z, v):
     """

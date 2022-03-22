@@ -57,8 +57,8 @@ def build_vae(hps: HyperParams):
     # Normalizing flow
     if hps.has_flow:
       flow_params = params[2]
-      z, logdetsum = run_flow(z, flow_params)
-      logqz -= logdetsum
+      z, logprob = run_flow(z, flow_params)
+      logqz += logprob
 
     logpz = log_normal(z)    # log p(z)
     # kld = gaussian_kld(mu, logvar)
