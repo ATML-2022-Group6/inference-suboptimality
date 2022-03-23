@@ -93,7 +93,7 @@ def build_aux_flow(hps: HyperParams):
         (flow2_net1_params, flow2_net2_params),
       ),
       (
-        qv_net_params, 
+        qv_net_params,  # Don't really need now. 
         rv_net_params,
       ),
     )
