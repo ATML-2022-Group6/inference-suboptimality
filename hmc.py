@@ -17,7 +17,7 @@ def hmc_sample_and_tune(
                                                   grad_U, stepsize)
 
     # Accept-reject procedure on (q*, p*) & adaptive tuning.
-    current_q, tuned_stepsize, updated_accept_trace = _hmc_accept_reject_adapt(
+    q, tuned_stepsize, updated_accept_trace = _hmc_accept_reject_adapt(
         rng,
         current_q, current_p,
         proposed_q, proposed_p, 
@@ -26,7 +26,7 @@ def hmc_sample_and_tune(
     )
     tuning_params_no_period = (tuned_stepsize, updated_accept_trace)
     
-    return current_q, tuning_params_no_period
+    return q, tuning_params_no_period
 
 def _leapfrog_integrator(
     current_q,
