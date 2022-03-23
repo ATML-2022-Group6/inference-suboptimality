@@ -26,12 +26,12 @@ def iwelbo_fn(rng, enc_params, decoder_params, image):
 
 def batch_iwelbo_fn(rng, enc_params, decoder_params, images):
   rngs = random.split(rng, batch_size)
-  return jnp.mean(jax.vmap(iwelbo_fn, in_axes=(0, None, None, 0))(rngs, enc_params, decoder_params, images))
+  return jnp.mean(jax.vmap(iwelbo_fn, in_axes=(0, 0, None, 0))(rngs, enc_params, decoder_params, images))
 
 
 def batch_loss_fn(rng, enc_params, decoder_params, images):
   rngs = random.split(rng, batch_size)
-  return jnp.mean(jax.vmap(loss_fn, in_axes=(0, None, None, 0))(rngs, enc_params, decoder_params, images))
+  return jnp.mean(jax.vmap(loss_fn, in_axes=(0, 0, None, 0))(rngs, enc_params, decoder_params, images))
 
 @jit
 def run_iwelbo_epoch(epoch, rng,opt_state, decoder_params, batch):
@@ -78,10 +78,10 @@ def optimize_local_gaussian(
 ):
     # init_rng = random.PRNGKey(0)
     # init_encoder_params, _ = init_vae(rng=init_rng, input_shape=(28 * 28,))
-
+    batch_size = len(batch)
     latent_size = z_size
-    mu0 = jnp.zeros((latent_size,))
-    logvar0 = jnp.zeros((latent_size,))
+    mu0 = jnp.zeros((batch_size,latent_size))
+    logvar0 = jnp.zeros((batch_size, latent_size))
     init_params = (mu0, logvar0)
 
     opt_state = opt_init(init_params)
@@ -150,5 +150,5 @@ def local_FFG(params, z_size, batches):
 
 
 
-# #To run: 
+#To run: 
 # local_FFG(get_params(opt_state), 50, train_batches)
