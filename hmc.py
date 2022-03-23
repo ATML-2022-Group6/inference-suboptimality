@@ -1,7 +1,36 @@
 from jax import numpy as jnp
 from jax import random
+
+def hamiltonian_monte_carlo(
+    current_q, current_p,
+    q, p, epsilon,
+    accept_trace, trace_len,
+    U, K
+):
+    # Compute current and proposed Hamiltonians.
+    current_H = K(current_p) + U(current_q)
+    proposed_H = K(p) + U(q)
     
-def leapfrog_integrator(current_q, current_p, U, grad_U, epsilon, num_steps=10):
+    # Metropolis accept-reject step.
+    prob = jnp.exp(current_H - proposed_H)
+    u = random.unif(prob.shape)
+    accepts = prob > u
+    q = q*accepts + current_q*(1.-accepts)
+    
+    accept_trace = accept_trace + accepts
+    criteria = (accept_trace / trace_len) > 0.65
+    adapt = 1.02*criteria + 0.98*(1. - criteria)
+    epsilon = epsilon*adapt  # Missing clamp
+    
+    return q, epsilon, accept_trace
+    
+
+def leapfrog_integrator(
+    current_q,  # Expect iid N(0, 1).
+    current_p, 
+    U, grad_U, 
+    epsilon, num_steps=10
+):
     epsilon = jnp.reshape(epsilon, newshape=(-1, 1))
     q = current_q
     
