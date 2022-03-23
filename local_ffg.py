@@ -153,11 +153,11 @@ def local_FFG(params, z_size, batches):
         print ('Local opt w/ ffg, batch %d, time elapse %.4f, ELBO %.4f, IWAE %.4f' % \
             (i+1, time.time()-time_, elbo, iwae))
         print ('mean of ELBO so far %.4f, mean of IWAE so far %.4f' % \
-            (jnp.nanmean(vae_record), jnp.nanmean(iwae_record)))
+            (np.nanmean(vae_record), np.nanmean(iwae_record)))
         time_ = time.time()
 
     print ('Finishing...')
-    print ('Average ELBO %.4f, IWAE %.4f' % (jnp.nanmean(vae_record), jnp.nanmean(iwae_record)))
+    print ('Average ELBO %.4f, IWAE %.4f' % (np.nanmean(vae_record), np.nanmean(iwae_record)))
     
 
 
