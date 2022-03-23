@@ -42,19 +42,19 @@ def build_vae(hps: HyperParams):
       params = (encoder_params, decoder_params)
 
     return params
-  
+
   @jit
   def apply_fun(params, x, rng, beta=1.):
     encoder_params = params[0]
     decoder_params = params[1]
-    
+
     eps_rng, run_flow_rng = random.split(rng, num=2)
 
     mu, logvar = encoder(encoder_params, x)
     eps = random.normal(eps_rng, mu.shape)
     z = mu + eps * jnp.exp(0.5 * logvar)
 
-    logqz = log_normal(z, mu, logvar)  # log q(z|x)    
+    logqz = log_normal(z, mu, logvar)  # log q(z|x)
 
     # Normalizing flow
     if hps.has_flow:
@@ -62,16 +62,16 @@ def build_vae(hps: HyperParams):
       z, logprob = run_flow(run_flow_rng, z, flow_params)
       logqz += logprob
 
-    logpz = log_normal(z)    # log p(z)
+    logpz = log_normal(z)  # log p(z)
     # kld = gaussian_kld(mu, logvar)
     kld = logqz - logpz
 
     logit = decoder(decoder_params, z)
-    likelihood = log_bernoulli(logit, x) # log p(x|z)
-    
-    elbo = likelihood - beta * kld 
+    likelihood = log_bernoulli(logit, x)  # log p(x|z)
+
+    elbo = likelihood - beta * kld
     return elbo, logit, likelihood, kld
-  
+
   # Sample from latent space and decode
   @jit
   def sample_fun(params, rng):
@@ -80,10 +80,9 @@ def build_vae(hps: HyperParams):
     logit = decoder(decoder_params, z)
     recon = 1 / (1 + jnp.exp(-logit))
     return recon
-  
+
   @jit
   def apply_local(rng, x, mu, logvar, decoder_params):
-
     eps = random.normal(rng, mu.shape)
     z = mu + eps * jnp.exp(0.5 * logvar)
     logit = decoder(decoder_params, z)
@@ -91,11 +90,32 @@ def build_vae(hps: HyperParams):
     likelihood = log_bernoulli(logit, x) # log p(x|z)
 
     logpz = log_normal(z)    # log p(z)
-    logqz = log_normal(z, mu, logvar)  # log q(z|x)    
-    
+    logqz = log_normal(z, mu, logvar)  # log q(z|x)
+
     # kld = gaussian_kld(mu, logvar)
     kld = logqz - logpz
     elbo = likelihood - kld
     return elbo, logit, likelihood, kld
   
-  return init_fun, apply_fun, apply_local, sample_fun
+  @jit
+  def apply_local_flow(rng, x, mu, logvar, flow_params, decoder_params):
+    eps_rng, run_flow_rng = random.split(rng, num=2)
+    
+    eps = random.normal(eps_rng, mu.shape)
+    z = mu + eps*jnp.exp(0.5 * logvar)
+
+    logqz = log_normal(z, mu, logvar)  # log q(z|x)
+    
+    z, logprob = run_flow(run_flow_rng, z, flow_params)
+    logqz += logprob  # log q(z|x) - log|dzT/dz0| + more correction stuffs.
+
+    logpz = log_normal(z)  # log p(z)
+    kld = logqz - logpz
+
+    logit = decoder(decoder_params, z)
+    likelihood = log_bernoulli(logit, x)  # log p(x|z)
+
+    elbo = likelihood - kld
+    return elbo, logit, likelihood, kld
+
+  return init_fun, apply_fun, apply_local, sample_fun, apply_local_flow
