@@ -10,18 +10,21 @@ def hmc_sample_and_tune(
     tuning_params,
 ):  
     """Our HMC magic function."""
+    stepsize, _, _ = tuning_params
+    
     # Hamiltonian dynamics to propose new (q*, p*).
-    proposed_q, proposed_p = _leapfrog_integrator(current_q, current_p, grad_U, stepsize)
+    proposed_q, proposed_p = _leapfrog_integrator(current_q, current_p, 
+                                                  grad_U, stepsize)
 
     # Accept-reject procedure on (q*, p*) & adaptive tuning.
-    current_q, stepsize, accept_trace = _hmc_accept_reject_adapt(
+    current_q, tuned_stepsize, updated_accept_trace = _hmc_accept_reject_adapt(
         rng,
         current_q, current_p,
         proposed_q, proposed_p, 
         U, K,
         tuning_params
     )
-    tuning_params_no_period = (stepsize, accept_trace)
+    tuning_params_no_period = (tuned_stepsize, updated_accept_trace)
     
     return current_q, tuning_params_no_period
 
