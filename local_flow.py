@@ -93,7 +93,7 @@ def optimize_local_flow(
     # Flow for each image.
     image_flow_rng = random.PRNGKey(0)
     image_flow_rng = random.split(image_flow_rng, num=batch_size)
-    flow_params0 = [init_flow(image_flow_rng[i]) for i in range(batch_size)]  # @Basim optimize please thanks :)
+    flow_params0 = jax.vmap(init_flow)(image_flow_rng)  # @Basim optimize please thanks :)
     
     init_params = (mu0, logvar0, flow_params0)
     
@@ -140,7 +140,7 @@ def optimize_local_flow(
     # evaluation
     vae_elbo = -loss
     # iwae_elbo = iw_loss
-    iwae_elbo = None
+    iwae_elbo = 0
     return vae_elbo, iwae_elbo, plot_elbo, plot_iwae
 
 def local_flow(params, z_size, batches):
