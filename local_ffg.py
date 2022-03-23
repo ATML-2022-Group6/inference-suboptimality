@@ -30,11 +30,13 @@ def iwelbo_fn(rng, enc_params, decoder_params, image):
     return iwelbo_K
 
 def batch_iwelbo_fn(rng, enc_params, decoder_params, images):
+  batch_size = len(batch)
   rngs = random.split(rng, batch_size)
   return jnp.mean(jax.vmap(iwelbo_fn, in_axes=(0, 0, None, 0))(rngs, enc_params, decoder_params, images))
 
 
 def batch_loss_fn(rng, enc_params, decoder_params, images):
+  batch_size = len(batch)
   rngs = random.split(rng, batch_size)
   return jnp.mean(jax.vmap(loss_fn, in_axes=(0, 0, None, 0))(rngs, enc_params, decoder_params, images))
 
