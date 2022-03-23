@@ -29,8 +29,9 @@ def log_bernoulli(logit, target):
 def gaussian_kld(mu, logvar):
   return -0.5 * jnp.sum(1. + logvar - mu**2. - jnp.exp(logvar))
 
-def log_normal(x, mean, logvar):
-  return -0.5 * (jnp.sum(logvar) + jnp.sum((x - mean)**2 / jnp.exp(logvar)))
+def log_normal(x, mean=0., logvar=0.):
+  """ Gaussian log-pdf (correct only up to constant) """
+  return -0.5 * jnp.sum(logvar + (x - mean)**2 / jnp.exp(logvar))
 
 def save_params(file_name, params):
   with open(file_name, "wb") as f:
