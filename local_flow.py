@@ -30,8 +30,8 @@ def loss_fn(rng, enc_params, decoder_params, image):
 
 def iwelbo_fn(rng, enc_params, decoder_params, image):
     rngs = random.split(rng, num_samples)
-    mu, logvar = enc_params
-    iw_log_summand, _, _, _ = jax.vmap(run_vae_local, in_axes=(0, None, None, None, None))( rngs, image, mu, logvar, decoder_params )
+    mu, logvar, flow_params = enc_params
+    iw_log_summand, _, _, _ = jax.vmap(run_vae_local_flow, in_axes=(0, None, None, None, None, None))( rngs, image, mu, logvar, flow_params, decoder_params )
 
     K = num_samples
     iwelbo_K = logsumexp(iw_log_summand) - jnp.log(K)
@@ -93,7 +93,7 @@ def optimize_local_flow(
     # Flow for each image.
     image_flow_rng = random.PRNGKey(0)
     image_flow_rng = random.split(image_flow_rng, num=batch_size)
-    flow_params0 = jax.vmap(init_flow)(image_flow_rng)  # @Basim optimize please thanks :)
+    flow_params0 = jax.vmap(init_flow)(image_flow_rng) 
     
     init_params = (mu0, logvar0, flow_params0)
     
@@ -110,12 +110,12 @@ def optimize_local_flow(
         rng, epoch_rng = random.split(rng)
         opt_state, loss = run_epoch(epoch-1, rng, opt_state, decoder_params, batch)
         
-        # iw_loss = run_iwelbo_epoch(epoch-1, rng,opt_state, decoder_params, batch)
+        iw_loss = run_iwelbo_epoch(epoch-1, rng,opt_state, decoder_params, batch)
 
         # if epoch % 1000 == 0:
         #   print(epoch, loss)
         train_elbo.append(loss)
-        # train_iwae.append(iw_loss)
+        train_iwae.append(iw_loss)
         if epoch % check_every == (check_every-1):
             last_avg = jnp.mean(jnp.array(train_elbo))
             last_avg_iwae = jnp.mean(jnp.array(train_iwae))
@@ -138,8 +138,7 @@ def optimize_local_flow(
 
     # evaluation
     vae_elbo = -loss
-    # iwae_elbo = iw_loss
-    iwae_elbo = 0
+    iwae_elbo = iw_loss
     return vae_elbo, iwae_elbo, plot_elbo, plot_iwae
 
 def local_flow(params, z_size, batches):
