@@ -106,7 +106,7 @@ def optimize_local_flow(
 
     plot_elbo, plot_iwae = [], []
 
-    for epoch in range(1, 999999):     
+    for epoch in trange(1, 999999):     
         rng, epoch_rng = random.split(rng)
         opt_state, loss = run_epoch(epoch-1, rng, opt_state, decoder_params, batch)
         
@@ -135,7 +135,6 @@ def optimize_local_flow(
             plot_elbo.append(-last_avg)
             # plot_iwae.append(last_avg_iwae)
             time_ = time.time()
-
 
     # evaluation
     vae_elbo = -loss
