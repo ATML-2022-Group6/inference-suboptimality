@@ -96,6 +96,6 @@ def _hmc_accept_reject_adapt(
                   > optimal_acceptance_rate)
   adapt = 1.02*criteria + 0.98*(1. - criteria)
   tuned_stepsize = stepsize * adapt
-  tuned_stepsize = lax.clamp(tuned_stepsize, 1e-4, .5)
+  tuned_stepsize = lax.clamp(1e-4, tuned_stepsize, .5)
 
   return proposed_q, tuned_stepsize, updated_accept_trace
