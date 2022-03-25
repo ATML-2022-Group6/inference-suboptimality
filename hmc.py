@@ -24,9 +24,7 @@ def hmc_sample_and_tune(
       U, K,
       tuning_params
   )
-  tuning_params_no_period = (tuned_stepsize, updated_accept_trace)
-
-  return proposed_q, tuning_params_no_period
+  return proposed_q, tuned_stepsize, updated_accept_trace
 
 def _leapfrog_integrator(
   current_q,
