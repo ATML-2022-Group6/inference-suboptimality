@@ -1,5 +1,5 @@
 from jax import numpy as jnp
-from jax import random
+from jax import random, lax
 
 def hmc_sample_and_tune(
   rng,
@@ -95,6 +95,7 @@ def _hmc_accept_reject_adapt(
   criteria = (updated_accept_trace/trace_period_elapsed
                   > optimal_acceptance_rate)
   adapt = 1.02*criteria + 0.98*(1. - criteria)
-  tuned_stepsize = stepsize * adapt  # WARNING :- Missing clamp onto [1e-4, .5] as in XC; maybe needed in practice?
+  tuned_stepsize = stepsize * adapt
+  tuned_stepsize = lax.clamp(tuned_stepsize, 1e-4, .5)
 
   return proposed_q, tuned_stepsize, updated_accept_trace
