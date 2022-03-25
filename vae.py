@@ -118,4 +118,4 @@ def build_vae(hps: HyperParams):
     elbo = likelihood - kld
     return elbo, logit, likelihood, kld
 
-  return init_fun, apply_fun, apply_local, sample_fun, apply_local_flow
+  return init_fun, apply_fun, apply_local, sample_fun, apply_local_flow, decoder
