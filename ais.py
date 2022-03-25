@@ -12,7 +12,7 @@ def ais_trajectory(
   hps: HyperParams,
   decoder_params,
   x,  # Input image.
-  schedule=jnp.linspace(0, 1, 500),
+  annealing_schedule=jnp.linspace(0., 1., 500),
 ):
   """Annealed importance sampling trajectories for a single batch."""
   latent_size = hps.latent_size
@@ -38,8 +38,8 @@ def ais_trajectory(
   log_f_i = _intermediate_dist
 
   # WARNING :- enumerate has to start with 1 due to division by period_elapsed in HMC.
-  for period_elapsed, (beta_0, beta_1) in enumerate(zip(schedule[:-1], schedule[1:]), 1):  
-    period_elapsed: int
+  for period_elapsed, (beta_0, beta_1) in enumerate(zip(annealing_schedule[:-1], 
+                                                        annealing_schedule[1:]), 1):
 
     # Log importance weight update
     log_int_1 = log_f_i(current_z, x, beta_0)
