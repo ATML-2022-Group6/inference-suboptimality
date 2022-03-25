@@ -1,11 +1,17 @@
+import jax
 from jax import numpy as jnp
 from jax import random, grad, lax
+from jax.scipy.special import logsumexp
 
 from utils import HyperParams, log_bernoulli, log_normal
 from hmc import hmc_sample_and_tune
 from vae import build_vae
 
+num_samples = 100
+batch_size = 100
 _, _, _, _, _, decoder = build_vae(HyperParams())
+
+
 
 def ais_trajectory(
   rng,
@@ -68,3 +74,17 @@ def ais_trajectory(
     )
   
   return log_importance_weight
+
+
+def batch_ais_fn(rng, hps, decoder_params, images):
+  rngs = random.split(rng, batch_size)
+  return jnp.mean(jax.vmap(ais_trajectory, in_axes=(0, None, None, 0))(rngs, hps, decoder_params, images))
+
+
+def ais_iwelbo_fn(rng, hps, decoder_params, images):
+    rngs = random.split(rng, num_samples)
+    logw_log_summand, _, _, _ = jax.vmap(ais_trajectory, in_axes=(0, None, None, None))( rngs, hps, decoder_params, images )
+
+    K = num_samples
+    logw_iwae_K = logsumexp(logw_log_summand) - jnp.log(K)
+    return logw_iwae_K
