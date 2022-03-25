@@ -83,7 +83,7 @@ def batch_ais_fn(rng, hps, decoder_params, images):
 
 def ais_iwelbo_fn(rng, hps, decoder_params, images):
     rngs = random.split(rng, num_samples)
-    logw_log_summand, _, _, _ = jax.vmap(ais_trajectory, in_axes=(0, None, None, None))( rngs, hps, decoder_params, images )
+    logw_log_summand = jax.vmap(ais_trajectory, in_axes=(0, None, None, None))( rngs, hps, decoder_params, images )
 
     K = num_samples
     logw_iwae_K = logsumexp(logw_log_summand) - jnp.log(K)
