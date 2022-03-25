@@ -1,5 +1,5 @@
 from jax import numpy as jnp
-from jax import random
+from jax import random, lax
 
 def hmc_sample_and_tune(
   rng,
@@ -24,9 +24,7 @@ def hmc_sample_and_tune(
       U, K,
       tuning_params
   )
-  tuning_params_no_period = (tuned_stepsize, updated_accept_trace)
-
-  return proposed_q, tuning_params_no_period
+  return proposed_q, tuned_stepsize, updated_accept_trace
 
 def _leapfrog_integrator(
   current_q,
@@ -97,6 +95,7 @@ def _hmc_accept_reject_adapt(
   criteria = (updated_accept_trace/trace_period_elapsed
                   > optimal_acceptance_rate)
   adapt = 1.02*criteria + 0.98*(1. - criteria)
-  tuned_stepsize = stepsize * adapt  # WARNING :- Missing clamp onto [1e-4, .5] as in XC; maybe needed in practice?
+  tuned_stepsize = stepsize * adapt
+  tuned_stepsize = lax.clamp(1e-4, tuned_stepsize, .5)
 
   return proposed_q, tuned_stepsize, updated_accept_trace
