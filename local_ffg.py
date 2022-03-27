@@ -13,9 +13,9 @@ from jax import random
 import jax
 import numpy as np
 
-num_samples = 32
+num_samples = 100
 
-batch_size = 128
+batch_size = 100
 
 opt_init, opt_update, get_params = optimizers.adam(step_size=1e-3, eps=1e-4)
 
@@ -105,10 +105,10 @@ def optimize_local_gaussian(
 
     plot_elbo, plot_iwae = [], []
 
-    for epoch in range(1, 999999):     
+    for epoch in range(1, 999999):
         rng, epoch_rng = random.split(rng)
         opt_state, loss = run_epoch(epoch-1, rng, opt_state, decoder_params, batch)
-        
+
         iw_loss = run_iwelbo_epoch(epoch-1, rng,opt_state, decoder_params, batch)
 
         # if epoch % 1000 == 0:
@@ -146,10 +146,16 @@ def local_FFG(params, z_size, batches):
     vae_record, iwae_record = [], []
     time_ = time.time()
     prev_seq = []
+    batch_plot_elbo = {}
+    batch_plot_iwae = {}
     for i, batch in enumerate(tqdm(batches)):
-        elbo, iwae, _ , _ = optimize_local_gaussian(log_bernoulli, decoder_params, batch, z_size)
+        elbo, iwae, plot_elbo , plot_iwae = optimize_local_gaussian(log_bernoulli, decoder_params, batch, z_size)
         vae_record.append(elbo)
         iwae_record.append(iwae)
+
+        batch_plot_elbo[i] = plot_elbo
+        batch_plot_iwae[i] = plot_iwae
+
         print ('Local opt w/ ffg, batch %d, time elapse %.4f, ELBO %.4f, IWAE %.4f' % \
             (i+1, time.time()-time_, elbo, iwae))
         print ('mean of ELBO so far %.4f, mean of IWAE so far %.4f' % \
@@ -158,9 +164,10 @@ def local_FFG(params, z_size, batches):
 
     print ('Finishing...')
     print ('Average ELBO %.4f, IWAE %.4f' % (np.nanmean(vae_record), np.nanmean(iwae_record)))
-    
+
+    return batch_plot_elbo, batch_plot_iwae
 
 
 
-#To run: 
+#To run:
 # local_FFG(get_params(opt_state), 50, train_batches)
