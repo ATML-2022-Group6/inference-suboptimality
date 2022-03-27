@@ -139,22 +139,17 @@ def optimize_local_gaussian(
     # evaluation
     vae_elbo = -loss
     iwae_elbo = iw_loss
-    return vae_elbo, iwae_elbo, plot_elbo, plot_iwae
+    return vae_elbo, iwae_elbo
 
 def local_FFG(params, z_size, batches):
     _, decoder_params = params
     vae_record, iwae_record = [], []
     time_ = time.time()
     prev_seq = []
-    batch_plot_elbo = {}
-    batch_plot_iwae = {}
     for i, batch in enumerate(tqdm(batches)):
         elbo, iwae, plot_elbo , plot_iwae = optimize_local_gaussian(log_bernoulli, decoder_params, batch, z_size)
         vae_record.append(elbo)
         iwae_record.append(iwae)
-
-        batch_plot_elbo[i] = plot_elbo
-        batch_plot_iwae[i] = plot_iwae
 
         print ('Local opt w/ ffg, batch %d, time elapse %.4f, ELBO %.4f, IWAE %.4f' % \
             (i+1, time.time()-time_, elbo, iwae))
@@ -165,7 +160,7 @@ def local_FFG(params, z_size, batches):
     print ('Finishing...')
     print ('Average ELBO %.4f, IWAE %.4f' % (np.nanmean(vae_record), np.nanmean(iwae_record)))
 
-    return batch_plot_elbo, batch_plot_iwae
+    return vae_record, iwae_record
 
 
 
