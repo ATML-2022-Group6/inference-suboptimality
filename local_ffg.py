@@ -20,7 +20,7 @@ batch_size = 100
 opt_init, opt_update, get_params = optimizers.adam(step_size=1e-3, eps=1e-4)
 
 hps = HyperParams(has_flow=False)
-init_vae, run_vae,run_vae_local,  sample_vae = build_vae(hps)
+init_vae, run_vae, run_vae_local, sample_vae, _, _ = build_vae(hps)
 
 def loss_fn(rng, enc_params, decoder_params, image):
   mu, logvar = enc_params
