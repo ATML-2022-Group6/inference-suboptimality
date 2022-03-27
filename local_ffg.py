@@ -139,7 +139,7 @@ def optimize_local_gaussian(
     # evaluation
     vae_elbo = -loss
     iwae_elbo = iw_loss
-    return vae_elbo, iwae_elbo
+    return vae_elbo, iwae_elbo, plot_elbo, plot_iwae
 
 def local_FFG(params, z_size, batches):
     _, decoder_params = params
@@ -147,7 +147,7 @@ def local_FFG(params, z_size, batches):
     time_ = time.time()
     prev_seq = []
     for i, batch in enumerate(tqdm(batches)):
-        elbo, iwae = optimize_local_gaussian(log_bernoulli, decoder_params, batch, z_size)
+        elbo, iwae, _, _ = optimize_local_gaussian(log_bernoulli, decoder_params, batch, z_size)
         vae_record.append(elbo)
         iwae_record.append(iwae)
 
