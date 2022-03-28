@@ -1,4 +1,3 @@
-from base64 import encode
 from functools import partial
 from jax import lax, random, jit
 from jax import numpy as jnp
@@ -81,32 +80,22 @@ class VAE:
     return elbo, logit, likelihood, kld
 
   @partial(jit, static_argnums=(0,))
-  def run_local(self, rng, x, mu, logvar, decoder_params):
-    eps = random.normal(rng, mu.shape)
-    z = mu + eps * jnp.exp(0.5 * logvar)
-    logit = self.decoder(decoder_params, z)
+  def run_local(self, rng, x, local_enc_params, decoder_params):
 
-    likelihood = log_bernoulli(logit, x) # log p(x|z)
-
-    logpz = log_normal(z)    # log p(z)
-    logqz = log_normal(z, mu, logvar)  # log q(z|x)
-
-    # kld = gaussian_kld(mu, logvar)
-    kld = logqz - logpz
-    elbo = likelihood - kld
-    return elbo, logit, likelihood, kld
-
-  @partial(jit, static_argnums=(0,))
-  def run_local_flow(self, rng, x, mu, logvar, flow_params, decoder_params):
     eps_rng, run_flow_rng = random.split(rng, num=2)
-    
+    mu = local_enc_params[0]
+    logvar = local_enc_params[1]
+
     eps = random.normal(eps_rng, mu.shape)
-    z = mu + eps*jnp.exp(0.5 * logvar)
+    z = mu + eps * jnp.exp(0.5 * logvar)
 
     logqz = log_normal(z, mu, logvar)  # log q(z|x)
-    
-    z, logprob = self.run_flow(run_flow_rng, z, flow_params)
-    logqz += logprob  # log q(z|x) - log|dzT/dz0| + more correction stuffs.
+
+    # Normalizing flow
+    if self.hps.has_flow:
+      flow_params = local_enc_params[2]
+      z, logprob = self.run_flow(run_flow_rng, z, flow_params)
+      logqz += logprob
 
     logpz = log_normal(z)  # log p(z)
     kld = logqz - logpz

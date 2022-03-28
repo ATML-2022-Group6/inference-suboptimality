@@ -1,3 +1,4 @@
+from mimetypes import init
 import numpy as np
 
 import jax
@@ -14,21 +15,19 @@ from tqdm.notebook import tqdm, trange
 from vae import VAE
 
 @partial(jit, static_argnums=(0,1))
-def batch_iwae(model: VAE, num_samples, images, rng, enc_params, dec_params):
+def batch_iwae(model: VAE, num_samples, images, rng, enc_paramss, dec_params):
   
-  def run_iwae(rng, image, mean, logvar):
+  def run_iwae(rng, image, enc_params):
     rngs = random.split(rng, num_samples)
-    iw_log_summand, _, _, _ = jax.vmap(
-        model.run_local,
-        in_axes=(0, None, None, None, None)
-      )( rngs, image, mean, logvar, dec_params )
+    iw_log_summand, _, _, _ = jax.vmap(model.run_local,
+        in_axes=(0, None, None, None)
+      )( rngs, image, enc_params, dec_params )
 
     iwelbo = logsumexp(iw_log_summand) - jnp.log(num_samples)
     return iwelbo
 
   rngs = random.split(rng, images.shape[0])
-  means, logvars = enc_params
-  iwaes = jax.vmap(run_iwae, in_axes=(0, 0, 0, 0))(rngs, images, means, logvars)
+  iwaes = jax.vmap(run_iwae, in_axes=(0, 0, 0))(rngs, images, enc_paramss)
 
   return jnp.mean(iwaes)
 
@@ -40,11 +39,7 @@ def run_epoch(
 
   def batch_loss_fn(enc_params):
     rngs = random.split(rng, batch.shape[0])
-    means, logvars = enc_params
-    elbos, _, _, _ = jax.vmap(
-        model.run_local, in_axes=(0, 0, 0, 0, None)
-      )(rngs, batch, means, logvars, decoder_params)
-
+    elbos, _, _, _ = jax.vmap(model.run_local, in_axes=(0, 0, 0, None))(rngs, batch, enc_params, decoder_params)
     return -jnp.mean(elbos)
 
   enc_params = optimizer.params_fn(opt_state)
@@ -52,7 +47,7 @@ def run_epoch(
 
   return optimizer.update_fn(epoch, g, opt_state), loss
 
-def optimize_local_gaussian(
+def optimize_local_batch(
   model: VAE,
   trained_params,
   batch,
@@ -69,7 +64,22 @@ def optimize_local_gaussian(
 
   # use trained encoder to initialise mu0, logvar0
   mu0, logvar0 = jax.vmap(model.encoder, in_axes=(None, 0))(encoder_params, batch)
-  init_params = (mu0, logvar0)
+
+  # whether to optimise local flow or local FFG
+  if model.hps.has_flow:
+
+    # take trained flow params if available, otherwise sample randomly
+    if len(trained_params) > 2:
+      flow_params0 = trained_params[2]
+    else:
+      flow_rng = random.PRNGKey(0)
+      batch_size = len(batch)
+      flow_params0 = jax.vmap(model.init_flow)(random.split(flow_rng, batch_size))
+    init_params = (mu0, logvar0, flow_params0)
+
+  else:
+    init_params = (mu0, logvar0)
+
   opt_state = optimizer.init_fn(init_params)
 
   best_avg, sentinel = 1e20, 0
@@ -100,13 +110,14 @@ def optimize_local_gaussian(
 
   return final_elbo, final_iwae
 
-def local_ffg(
+def local_opt(
   model: VAE, dataset, trained_params,
-  optimizer: optimizers.Optimizer = optimizers.adam(step_size=1e-4, eps=1e-4),
+  optimizer: optimizers.Optimizer = optimizers.adam(step_size=1e-3, eps=1e-4),
 ):
   elbo_record, iwae_record = [], []
+  print("Optimising Local", "Flow" if model.hps.has_flow else "FFG", "...")
   for i, batch in enumerate(tqdm(dataset)):
-    elbo, iwae = optimize_local_gaussian(model, trained_params, batch, optimizer)
+    elbo, iwae = optimize_local_batch(model, trained_params, batch, optimizer)
     elbo_record.append(elbo)
     iwae_record.append(iwae)
     print("Batch {}, ELBO {:.4f}, IWAE {:.4f}".format(i+1, elbo, iwae))
