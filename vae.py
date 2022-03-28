@@ -9,22 +9,27 @@ from flow import build_flow, build_aux_flow
 
 from utils import log_bernoulli, log_normal, HyperParams
 
+def make_mlp(layer_sizes, act_fun=stax.Elu):
+  layers = []
+  for width in layer_sizes:
+    layers.append(stax.Dense(width))
+    layers.append(act_fun)
+  return layers
+
 class VAE:
 
   def __init__(self, hps: HyperParams):
     self.encoder_init, self.encoder = stax.serial(
-      stax.Dense(hps.encoder_width), hps.act_fun,
-      stax.Dense(hps.encoder_width), hps.act_fun,
+      *make_mlp(hps.encoder_hidden),
       stax.FanOut(2),
       stax.parallel(
-        stax.Dense(hps.latent_size),
-        stax.Dense(hps.latent_size),
+        stax.Dense(hps.latent_size), # mean
+        stax.Dense(hps.latent_size), # log var
       ),
     )
     self.decoder_init, self.decoder = stax.serial(
-      stax.Dense(hps.decoder_width), hps.act_fun,
-      stax.Dense(hps.decoder_width), hps.act_fun,
-      stax.Dense(hps.image_size),
+      *make_mlp(hps.decoder_hidden),
+      stax.Dense(hps.image_size)
     )
     self.init_flow, self.run_flow = build_aux_flow(hps)
     self.hps = hps

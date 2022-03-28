@@ -8,11 +8,10 @@ import pickle
 
 @dataclass
 class HyperParams:
-  latent_size: int = 50
   image_size: int = 28 * 28
-  encoder_width: int = 200
-  decoder_width: int = 200
-  act_fun: tuple = stax.Elu
+  latent_size: int = 50
+  encoder_hidden: tuple = (200, 200)
+  decoder_hidden: tuple = (200, 200)
   has_flow: bool = False
 
 def log_bernoulli(logit, target):
