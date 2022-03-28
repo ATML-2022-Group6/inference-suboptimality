@@ -1,3 +1,5 @@
+from base64 import encode
+from functools import partial
 from jax import lax, random, jit
 from jax import numpy as jnp
 from jax.scipy import stats
@@ -7,85 +9,77 @@ from flow import build_flow, build_aux_flow
 
 from utils import log_bernoulli, log_normal, HyperParams
 
-def build_vae(hps: HyperParams):
+class VAE:
 
-  encoder_init, encoder = stax.serial(
-    stax.Dense(hps.encoder_width), hps.act_fun,
-    stax.Dense(hps.encoder_width), hps.act_fun,
-    stax.FanOut(2),
-    stax.parallel(
-      stax.Dense(hps.latent_size),
-      stax.Dense(hps.latent_size),
-    ),
-  )
-  decoder_init, decoder = stax.serial(
-    stax.Dense(hps.decoder_width), hps.act_fun,
-    stax.Dense(hps.decoder_width), hps.act_fun,
-    stax.Dense(hps.image_size),
-  )
-  init_flow, run_flow = build_aux_flow(hps)
-
-  def init_fun(rng, input_shape):
-    assert input_shape[-1] == hps.image_size
-
+  def __init__(self, hps: HyperParams):
+    self.encoder_init, self.encoder = stax.serial(
+      stax.Dense(hps.encoder_width), hps.act_fun,
+      stax.Dense(hps.encoder_width), hps.act_fun,
+      stax.FanOut(2),
+      stax.parallel(
+        stax.Dense(hps.latent_size),
+        stax.Dense(hps.latent_size),
+      ),
+    )
+    self.decoder_init, self.decoder = stax.serial(
+      stax.Dense(hps.decoder_width), hps.act_fun,
+      stax.Dense(hps.decoder_width), hps.act_fun,
+      stax.Dense(hps.image_size),
+    )
+    self.init_flow, self.run_flow = build_aux_flow(hps)
+    self.hps = hps
+  
+  def init_params(self, rng):
     encoder_rng, decoder_rng, flow_rng = random.split(rng, num=3)
 
-    _, encoder_params = encoder_init(encoder_rng, input_shape=input_shape)
+    encoder_input_shape = (self.hps.image_size,)
+    decoder_input_shape = (self.hps.latent_size,)
 
-    decoder_input_shape = input_shape[:-1] + (hps.latent_size,)
-    output_shape, decoder_params = decoder_init(decoder_rng, input_shape=decoder_input_shape)
+    _, encoder_params = self.encoder_init(encoder_rng, input_shape=encoder_input_shape)
+    _, decoder_params = self.decoder_init(decoder_rng, input_shape=decoder_input_shape)
 
-    if hps.has_flow:
-      flow_params = init_flow(flow_rng)
+    if self.hps.has_flow:
+      flow_params = self.init_flow(flow_rng)
       params = (encoder_params, decoder_params, flow_params)
     else:
       params = (encoder_params, decoder_params)
 
     return params
-
-  @jit
-  def apply_fun(params, x, rng, beta=1.):
+  
+  @partial(jit, static_argnums=(0,))
+  def run(self, params, x, rng, beta=1.):
     encoder_params = params[0]
     decoder_params = params[1]
 
     eps_rng, run_flow_rng = random.split(rng, num=2)
 
-    mu, logvar = encoder(encoder_params, x)
+    mu, logvar = self.encoder(encoder_params, x)
     eps = random.normal(eps_rng, mu.shape)
     z = mu + eps * jnp.exp(0.5 * logvar)
 
     logqz = log_normal(z, mu, logvar)  # log q(z|x)
 
     # Normalizing flow
-    if hps.has_flow:
+    if self.hps.has_flow:
       flow_params = params[2]
-      z, logprob = run_flow(run_flow_rng, z, flow_params)
+      z, logprob = self.run_flow(run_flow_rng, z, flow_params)
       logqz += logprob
 
     logpz = log_normal(z)  # log p(z)
     # kld = gaussian_kld(mu, logvar)
     kld = logqz - logpz
 
-    logit = decoder(decoder_params, z)
+    logit = self.decoder(decoder_params, z)
     likelihood = log_bernoulli(logit, x)  # log p(x|z)
 
     elbo = likelihood - beta * kld
     return elbo, logit, likelihood, kld
 
-  # Sample from latent space and decode
-  @jit
-  def sample_fun(params, rng):
-    decoder_params = params[1]
-    z = random.normal(rng, (hps.latent_size,))
-    logit = decoder(decoder_params, z)
-    recon = 1 / (1 + jnp.exp(-logit))
-    return recon
-
-  @jit
-  def apply_local(rng, x, mu, logvar, decoder_params):
+  @partial(jit, static_argnums=(0,))
+  def run_local(self, rng, x, mu, logvar, decoder_params):
     eps = random.normal(rng, mu.shape)
     z = mu + eps * jnp.exp(0.5 * logvar)
-    logit = decoder(decoder_params, z)
+    logit = self.decoder(decoder_params, z)
 
     likelihood = log_bernoulli(logit, x) # log p(x|z)
 
@@ -96,9 +90,9 @@ def build_vae(hps: HyperParams):
     kld = logqz - logpz
     elbo = likelihood - kld
     return elbo, logit, likelihood, kld
-  
-  @jit
-  def apply_local_flow(rng, x, mu, logvar, flow_params, decoder_params):
+
+  @partial(jit, static_argnums=(0,))
+  def run_local_flow(self, rng, x, mu, logvar, flow_params, decoder_params):
     eps_rng, run_flow_rng = random.split(rng, num=2)
     
     eps = random.normal(eps_rng, mu.shape)
@@ -106,16 +100,23 @@ def build_vae(hps: HyperParams):
 
     logqz = log_normal(z, mu, logvar)  # log q(z|x)
     
-    z, logprob = run_flow(run_flow_rng, z, flow_params)
+    z, logprob = self.run_flow(run_flow_rng, z, flow_params)
     logqz += logprob  # log q(z|x) - log|dzT/dz0| + more correction stuffs.
 
     logpz = log_normal(z)  # log p(z)
     kld = logqz - logpz
 
-    logit = decoder(decoder_params, z)
+    logit = self.decoder(decoder_params, z)
     likelihood = log_bernoulli(logit, x)  # log p(x|z)
 
     elbo = likelihood - kld
     return elbo, logit, likelihood, kld
 
-  return init_fun, apply_fun, apply_local, sample_fun, apply_local_flow, decoder
+  @partial(jit, static_argnums=(0,))
+  def sample(self, params, rng):
+    """ Sample from latent space and decode """
+    decoder_params = params[1]
+    z = random.normal(rng, (self.hps.latent_size,))
+    logit = self.decoder(decoder_params, z)
+    recon = 1 / (1 + jnp.exp(-logit))
+    return recon

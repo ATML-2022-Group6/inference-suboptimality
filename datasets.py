@@ -5,8 +5,8 @@ from jax import numpy as jnp
 
 MNIST_PATH = "datasets/mnist.pkl"
 
-# Load Larochelle (binarised) MNIST data
 def get_mnist(path = MNIST_PATH):
+  """ Load Larochelle (binarised) MNIST data """
   with open(path, "rb") as f:
     data = pickle.load(f, encoding="latin1")
     mnist = {
@@ -18,3 +18,14 @@ def get_mnist(path = MNIST_PATH):
     for k in mnist:
       mnist[k] = jnp.array(mnist[k])
     return mnist
+
+def get_batches(data, batch_size, smaller_data=False, smaller_size=1000):
+  """
+    Split train data into batches. Discard last batch if uneven for equal size
+    arrays.
+  """
+  if smaller_data:
+    data = data[:smaller_size]
+  num_batches = len(data) // batch_size
+  batches = [ data[i*batch_size:(i+1)*batch_size] for i in range(num_batches) ]
+  return num_batches, jnp.array(batches)
