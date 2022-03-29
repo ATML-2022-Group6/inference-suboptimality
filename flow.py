@@ -190,6 +190,8 @@ def build_aux_flow(hps: HyperParams):
   return init_fun, sample
 
 
+
+
 def build_flow(hps: HyperParams):
   """Real-NVP (Dinh et al.) without auxiliary variable."""
   hidden_size: int = 50
