@@ -4,7 +4,7 @@ from jax import numpy as jnp
 from jax.scipy import stats
 from jax.example_libraries import stax
 
-from flow import build_flow, build_aux_flow
+from flow import build_aux_flow
 
 from utils import log_bernoulli, log_normal, HyperParams
 
@@ -66,7 +66,7 @@ class VAE:
     # Normalizing flow
     if self.hps.has_flow:
       flow_params = params[2]
-      z, logprob = self.run_flow(run_flow_rng, z, flow_params)
+      z, logprob = self.run_flow(run_flow_rng, z, x, flow_params)
       logqz += logprob
 
     logpz = log_normal(z)  # log p(z)
