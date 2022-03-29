@@ -78,9 +78,9 @@ def build_aux_flow(hps: HyperParams):
     logqv0 = log_normal(v0, mean_v0, logvar_v0)
     
     # Flow procedure. Currently fixed to 2 flows only.
-    zT, vT, logdet_flow1 = _norm_flow(z0, v0, 
+    zT, vT, logdet_flow1 = _norm_flow(z0, v0, x,
                                       norm_flow_params[0])
-    zT, vT, logdet_flow2 = _norm_flow(zT, vT,
+    zT, vT, logdet_flow2 = _norm_flow(zT, vT, x,
                                       norm_flow_params[1])
     inverse_logdet_sum = -(logdet_flow1 + logdet_flow2)
     
