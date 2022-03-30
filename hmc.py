@@ -18,11 +18,11 @@ def hmc_sample_and_tune(
 
   # Accept-reject procedure on (q*, p*) & adaptive tuning.
   proposed_q, tuned_stepsize, updated_accept_trace = _hmc_accept_reject_adapt(
-      rng,
-      current_q, current_p,
-      proposed_q, proposed_p,
-      U, K,
-      tuning_params
+    rng,
+    current_q, current_p,
+    proposed_q, proposed_p,
+    U, K,
+    tuning_params
   )
   return proposed_q, tuned_stepsize, updated_accept_trace
 
@@ -47,10 +47,10 @@ def _leapfrog_integrator(
   p = current_p - 0.5*stepsize*grad_U(q)
 
   for i in range(1, num_steps+1):
-      q = q + p*stepsize  # Full step for position.
-      # Full step for momentum, while not end of trajectory.
-      if i < num_steps:
-          p = p - stepsize*grad_U(q)
+    q = q + p*stepsize  # Full step for position.
+    # Full step for momentum, while not end of trajectory.
+    if i < num_steps:
+      p = p - stepsize*grad_U(q)
 
   # Finally do a half step for momentum.
   p = p - 0.5*stepsize*grad_U(q)
@@ -93,7 +93,7 @@ def _hmc_accept_reject_adapt(
   # Tuning step.
   updated_accept_trace = accept_trace + accepts
   criteria = (updated_accept_trace/trace_period_elapsed
-                  > optimal_acceptance_rate)
+                > optimal_acceptance_rate)
   adapt = 1.02*criteria + 0.98*(1. - criteria)
   tuned_stepsize = stepsize * adapt
   tuned_stepsize = lax.clamp(1e-4, tuned_stepsize, .5)
