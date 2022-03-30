@@ -13,6 +13,7 @@ class HyperParams:
   encoder_hidden: tuple = (200, 200)
   decoder_hidden: tuple = (200, 200)
   has_flow: bool = False
+  flow_hidden_size: int = 200
 
 def log_bernoulli(logit, target):
   # Numerically equivalent to Binary Cross Entropy loss (TODO: How?)

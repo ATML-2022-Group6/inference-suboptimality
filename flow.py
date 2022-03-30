@@ -6,7 +6,7 @@ from utils import HyperParams, log_normal
 
 def build_aux_flow(hps: HyperParams):
   """Normalizing flow + auxiliary variable."""
-  hidden_size: int = 50
+  hidden_size: int = hps.flow_hidden_size
   latent_size: int = hps.latent_size
   image_size: int = hps.image_size
 
