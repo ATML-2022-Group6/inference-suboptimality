@@ -1,7 +1,5 @@
-from functools import partial
-
 import jax
-from jax import nn, random, lax
+from jax import nn, random
 from jax import numpy as jnp
 from jax.example_libraries import stax
 
@@ -9,7 +7,7 @@ from utils import HyperParams, log_normal
 
 def build_aux_flow(hps: HyperParams):
   """Normalizing flow + auxiliary variable."""
-  num_flows: int = 5
+  num_flows: int = hps.num_flows
   hidden_size: int = hps.flow_hidden_size
   latent_size: int = hps.latent_size
   image_size: int = hps.image_size
@@ -45,7 +43,7 @@ def build_aux_flow(hps: HyperParams):
   def init_fun(rng):
     flow_rng, aux_rng = random.split(rng)
 
-    # Flow procedure.
+    # Normalizing flow procedure.
     flow_rngs = random.split(flow_rng, 2 * num_flows)
     flow_net1_params = jax.vmap(make_flow_net)(flow_rngs[:num_flows])
     flow_net2_params = jax.vmap(make_flow_net)(flow_rngs[num_flows:])
@@ -69,37 +67,29 @@ def build_aux_flow(hps: HyperParams):
     zx = jnp.concatenate((z0, x))
     v0, logqv0 = _forward_aux_var(rng, zx, qv_net_params)
 
-    #          flow0 -> flow1 -> flow3 
-    #            v        v         v
-    # z0,v0 ->  z1,v1 -> z2,v2 -> z3,v3  ->
-    #            v        v         v
-    #          logdet1   logdet2   logdet3
-
-    # ( flow_net1s, flow_net2s )
-    # flow_net1s = [flow1_net1, flow2_net1]
-    # flow_net2s = [flow1_net2, flow2_net2]
-
-    # [ (flow1_net1, flow1_net2), (flow2_net1, flow2_net2) ]
-    #      shape       shape         shape       shape
-    # [ (flow1_net1[i], flow1_net2[i]), (flow2_net1[i], flow2_net2[i]) ]
-    #   where 0 <= i < flow1_net1.shape[0]
-
-    # Flow procedure.
-  
+    # Normalizing flow procedure.
     def flow_proc(carry, norm_flow_param):
+      """Scan norm flow params, carry over (zT, vT) and compute logdets."""
+      #
+      #            flow0 -> flow1 -> flow3 ->  ...
+      #              \        \         \        \
+      #   z0,v0 ->  z1,v1 -> z2,v2 -> z3,v3  ->  ...
+      #                \        \         \        \
+      #              logdet1   logdet2   logdet3   ...
+      #
       last_zT, last_vT = carry
       zT, vT, logdet_flow = _norm_flow(last_zT, last_vT, x, norm_flow_param)
       return (zT, vT), logdet_flow
-
-    (zT, vT), logdet_flows = lax.scan(flow_proc, (z0, v0), norm_flow_params)
-    inverse_logdet_sum = -jnp.sum(logdet_flows, axis=0)
+    
+    (zT, vT), logdet_flows = jax.lax.scan(flow_proc, (z0, v0), norm_flow_params)
+    logdet_jac = jnp.sum(logdet_flows, axis=0)
 
     # Auxiliary variable step; reverse model r(v|x,z).
     zx = jnp.concatenate((zT, x))
     logrvT = _reverse_aux_var(zx, vT, rv_net_params)
 
     # Auxiliary flow correction to log q(z|x).
-    logprob = logqv0 + inverse_logdet_sum - logrvT
+    logprob = logqv0 - logdet_jac - logrvT
 
     return zT, logprob
   
