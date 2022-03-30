@@ -1,4 +1,6 @@
-from jax import nn, random
+from functools import partial
+
+from jax import nn, random, lax
 from jax import numpy as jnp
 from jax.example_libraries import stax
 
@@ -6,6 +8,7 @@ from utils import HyperParams, log_normal
 
 def build_aux_flow(hps: HyperParams):
   """Normalizing flow + auxiliary variable."""
+  num_flows: int = 2
   hidden_size: int = hps.flow_hidden_size
   latent_size: int = hps.latent_size
   image_size: int = hps.image_size
@@ -69,12 +72,11 @@ def build_aux_flow(hps: HyperParams):
     zx = jnp.concatenate((z0, x))
     v0, logqv0 = _forward_aux_var(rng, zx, qv_net_params)
 
-    # Flow procedure. Currently fixed to 2 flows only.
-    zT, vT, logdet_flow1 = _norm_flow(z0, v0, x,
-                                      norm_flow_params[0])
-    zT, vT, logdet_flow2 = _norm_flow(zT, vT, x,
-                                      norm_flow_params[1])
-    inverse_logdet_sum = -(logdet_flow1 + logdet_flow2)
+    # Flow procedure.
+    logdet = jnp.zeros(shape=(num_flows, latent_size))
+    _flow_proc = partial(_flow_proc_full, norm_flow_params=norm_flow_params)
+    (zT, vT, _, _), logdet = lax.scan(_flow_proc, (z0, v0, x, 0), logdet)
+    inverse_logdet_sum = -jnp.sum(logdet, axis=0)
 
     # Auxiliary variable step; reverse model r(v|x,z).
     zx = jnp.concatenate((zT, x))
@@ -84,7 +86,15 @@ def build_aux_flow(hps: HyperParams):
     logprob = logqv0 + inverse_logdet_sum - logrvT
 
     return zT, logprob
-
+  
+  def _flow_proc_full(carry, logdet, norm_flow_params):
+    last_zT, last_vT, x, flow_idx = carry
+    zT, vT, logdet_flow = _norm_flow(last_zT, last_vT, x,
+                                norm_flow_params[flow_idx])
+    logdet = logdet + logdet_flow
+    flow_idx += 1
+    return (zT, vT, x, flow_idx), logdet
+  
   def _norm_flow(z, v, x, params):
     """
     Real-NVP (Dinh et al.) normalizing flow as defined
