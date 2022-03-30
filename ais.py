@@ -11,8 +11,6 @@ num_samples = 10
 batch_size = 100
 _, _, _, _, _, decoder = build_vae(HyperParams())
 
-
-
 def ais_trajectory(
   rng,
   hps: HyperParams,
@@ -26,13 +24,13 @@ def ais_trajectory(
   v_rng, z_rng, hmc_rng = random.split(rng, num=3)
 
   def _intermediate_dist(z, x, beta, log_likelihood_fn=log_bernoulli):
-      zeros = jnp.zeros(z.shape)
-      log_prior = log_normal(z, zeros, zeros)
+    zeros = jnp.zeros(z.shape)
+    log_prior = log_normal(z, zeros, zeros)
 
-      logit = decoder(decoder_params, z)
-      log_likelihood = log_likelihood_fn(logit, x)
+    logit = decoder(decoder_params, z)
+    log_likelihood = log_likelihood_fn(logit, x)
 
-      return log_prior + (beta*log_likelihood)
+    return log_prior + (beta*log_likelihood)
 
   stepsize = jnp.ones(1)*0.01
   accept_trace = jnp.zeros(1)
@@ -53,7 +51,7 @@ def ais_trajectory(
     log_importance_weight = log_importance_weight + (log_int_2 - log_int_1)
 
     def U(z):
-        return -log_f_i(z, x, beta_1)
+      return -log_f_i(z, x, beta_1)
 
     def grad_U(z):
       gradient = grad(U)(z)
@@ -61,18 +59,18 @@ def ais_trajectory(
       return gradient
 
     def normalized_K(v):
-        zeros = jnp.zeros(v.shape)
-        return -log_normal(v, zeros, zeros)
+      zeros = jnp.zeros(v.shape)
+      return -log_normal(v, zeros, zeros)
 
     tuning_params = (stepsize, accept_trace, period_elapsed)
     current_v = random.normal(v_rng, shape=current_z.shape)
     current_z, stepsize, accept_trace = hmc_sample_and_tune(
-        hmc_rng,
-        current_z, current_v,
-        U, normalized_K, grad_U,
-        tuning_params
+      hmc_rng,
+      current_z, current_v,
+      U, normalized_K, grad_U,
+      tuning_params
     )
-  
+
   return log_importance_weight
 
 
@@ -82,9 +80,9 @@ def batch_ais_fn(rng, hps, decoder_params, images):
 
 
 def ais_iwelbo_fn(rng, hps, decoder_params, images):
-    rngs = random.split(rng, num_samples)
-    logw_log_summand = jax.vmap(ais_trajectory, in_axes=(0, None, None, None))( rngs, hps, decoder_params, images )
+  rngs = random.split(rng, num_samples)
+  logw_log_summand = jax.vmap(ais_trajectory, in_axes=(0, None, None, None))( rngs, hps, decoder_params, images )
 
-    K = num_samples
-    logw_iwae_K = logsumexp(logw_log_summand) - jnp.log(K)
-    return logw_iwae_K
+  K = num_samples
+  logw_iwae_K = logsumexp(logw_log_summand) - jnp.log(K)
+  return logw_iwae_K
