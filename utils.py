@@ -13,6 +13,7 @@ class HyperParams:
   encoder_hidden: tuple = (200, 200)
   decoder_hidden: tuple = (200, 200)
   has_flow: bool = False
+  num_flows: int = 2
   flow_hidden_size: int = 200
 
 def log_bernoulli(logit, target):
