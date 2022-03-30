@@ -61,6 +61,7 @@ def optimize_local_batch(
 ):
   encoder_params = trained_params[0]
   decoder_params = trained_params[1]
+  batch_size = len(batch)
 
   # use trained encoder to initialise mu0, logvar0
   mu0, logvar0 = jax.vmap(model.encoder, in_axes=(None, 0))(encoder_params, batch)
@@ -70,10 +71,12 @@ def optimize_local_batch(
 
     # take trained flow params if available, otherwise sample randomly
     if len(trained_params) > 2:
-      flow_params0 = trained_params[2]
+      flow_params0 = jax.tree_util.tree_map(
+        lambda x: jnp.array([x] * batch_size),
+        trained_params[2]
+      )
     else:
       flow_rng = random.PRNGKey(0)
-      batch_size = len(batch)
       flow_params0 = jax.vmap(model.init_flow)(random.split(flow_rng, batch_size))
     init_params = (mu0, logvar0, flow_params0)
 
