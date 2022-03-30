@@ -94,7 +94,7 @@ class VAE:
     # Normalizing flow
     if self.hps.has_flow:
       flow_params = local_enc_params[2]
-      z, logprob = self.run_flow(run_flow_rng, z, flow_params)
+      z, logprob = self.run_flow(run_flow_rng, z, x, flow_params)
       logqz += logprob
 
     logpz = log_normal(z)  # log p(z)
