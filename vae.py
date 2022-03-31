@@ -20,10 +20,12 @@ class VAE:
   def __init__(self, hps: HyperParams):
     self.encoder_init, self.encoder = stax.serial(
       *make_mlp(hps.encoder_hidden),
-      stax.FanOut(2),
+      stax.FanOut(3 if hps.has_flow else 2),
       stax.parallel(
         stax.Dense(hps.latent_size), # mean
         stax.Dense(hps.latent_size), # log var
+        # flow info layer
+        *([ stax.Dense(hps.latent_size), stax.Elu ] if hps.has_flow else [])
       ),
     )
     self.decoder_init, self.decoder = stax.serial(
@@ -57,7 +59,11 @@ class VAE:
 
     eps_rng, run_flow_rng = random.split(rng, num=2)
 
-    mu, logvar = self.encoder(encoder_params, x)
+    if self.hps.has_flow:
+      mu, logvar, flow_info = self.encoder(encoder_params, x)
+    else:
+      mu, logvar = self.encoder(encoder_params, x)
+
     eps = random.normal(eps_rng, mu.shape)
     z = mu + eps * jnp.exp(0.5 * logvar)
 
@@ -66,7 +72,7 @@ class VAE:
     # Normalizing flow
     if self.hps.has_flow:
       flow_params = params[2]
-      z, logprob = self.run_flow(run_flow_rng, z, x, flow_params)
+      z, logprob = self.run_flow(run_flow_rng, z, flow_info, flow_params)
       logqz += logprob
 
     logpz = log_normal(z)  # log p(z)
@@ -94,7 +100,9 @@ class VAE:
     # Normalizing flow
     if self.hps.has_flow:
       flow_params = local_enc_params[2]
-      z, logprob = self.run_flow(run_flow_rng, z, x, flow_params)
+      # for local flow we fix flow_info to be constant zeros
+      flow_info = jnp.zeros((self.hps.latent_size,))
+      z, logprob = self.run_flow(run_flow_rng, z, flow_info, flow_params)
       logqz += logprob
 
     logpz = log_normal(z)  # log p(z)
