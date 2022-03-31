@@ -10,7 +10,7 @@ def build_aux_flow(hps: HyperParams):
   num_flows: int = hps.num_flows
   hidden_size: int = hps.flow_hidden_size
   latent_size: int = hps.latent_size
-  image_size: int = hps.image_size
+  info_size: int = hps.latent_size
 
   # Nets for `_norm_flow()` method; eq. (9) and (10) in Cremer et al.
   # We assume that each net for each flow assumes the same architecture.
@@ -37,7 +37,7 @@ def build_aux_flow(hps: HyperParams):
   )
 
   def make_flow_net(rng):
-    _, params = flow_net_init(rng, input_shape=(image_size+latent_size,))
+    _, params = flow_net_init(rng, input_shape=(info_size+latent_size,))
     return params
 
   def init_fun(rng):
@@ -51,8 +51,8 @@ def build_aux_flow(hps: HyperParams):
 
     # Auxiliary variable procedure.
     qv_rng, rv_rng = random.split(aux_rng)
-    _, qv_net_params = model_net_init(qv_rng, input_shape=(image_size+latent_size,))
-    _, rv_net_params = model_net_init(rv_rng, input_shape=(image_size+latent_size,))
+    _, qv_net_params = model_net_init(qv_rng, input_shape=(info_size+latent_size,))
+    _, rv_net_params = model_net_init(rv_rng, input_shape=(info_size+latent_size,))
 
     params = (norm_flow_params, (qv_net_params, rv_net_params))
 
