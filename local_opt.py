@@ -115,7 +115,7 @@ def optimize_local_batch(
 
 def local_opt(
   model: VAE, dataset, trained_params,
-  optimizer: optimizers.Optimizer = optimizers.adam(step_size=1e-3, eps=1e-4),
+  optimizer: optimizers.Optimizer = optimizers.adam(step_size=1e-4, eps=1e-4),
 ):
   elbo_record, iwae_record = [], []
   print("Optimising Local", "Flow" if model.hps.has_flow else "FFG", "...")
