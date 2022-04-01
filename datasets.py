@@ -28,4 +28,4 @@ def get_batches(data, batch_size, smaller_data=False, smaller_size=1000):
     data = data[:smaller_size]
   num_batches = len(data) // batch_size
   batches = [ data[i*batch_size:(i+1)*batch_size] for i in range(num_batches) ]
-  return num_batches, jnp.array(batches)
+  return jnp.array(batches)
