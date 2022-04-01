@@ -19,7 +19,7 @@ class TrainHyperParams:
   display_epoch: int = 10
 
   # num ELBO samples for final evaluation
-  eval_elbos: int = 1
+  eval_elbos: int = 1000
 
   # always save final params to save_dir/params_{time}.pkl
   # optionally save params every `save_epoch` epochs if positive
@@ -41,18 +41,22 @@ class TrainHyperParams:
 
 @partial(jit, static_argnums=(0,1))
 def dataset_elbo(model, num_samples, dataset, rng, params):
-
-  # TODO: Better ELBO w/ variance!
+  """ Compute mean + std. dev of computing the dataset ELBO `num_sample` times. """
 
   def batch_elbo(images, rng):
     rngs = random.split(rng, images.shape[0])
     elbos, _, _, _ = jax.vmap(model.run, in_axes=(None, 0, 0))(params, images, rngs)
     return jnp.mean(elbos)
   
-  rngs = random.split(rng, dataset.shape[0])
-  elbos = jax.vmap(batch_elbo)(dataset, rngs)
-  return jnp.mean(elbos)
+  def full_elbo(rng):
+    rngs = random.split(rng, dataset.shape[0])
+    elbos = jax.vmap(batch_elbo)(dataset, rngs)
+    return jnp.mean(elbos)
+  
+  rngs = random.split(rng, num_samples)
+  elbos = jax.vmap(full_elbo)(rngs)
 
+  return jnp.mean(elbos), jnp.std(elbos)
 
 def train_vae(hps: TrainHyperParams, model: VAE, train_batches, test_batches):
   
@@ -144,10 +148,12 @@ def train_vae(hps: TrainHyperParams, model: VAE, train_batches, test_batches):
   eval_elbos = hps.eval_elbos
   eval_rng = random.PRNGKey(0)
 
-  final_train_elbo = dataset_elbo(model, eval_elbos, train_batches, eval_rng, params)
-  print("Final Train ELBO:", final_train_elbo)
+  print("Evaluating final ELBOs...")
 
-  final_test_elbo = dataset_elbo(model, eval_elbos, test_batches, eval_rng, params)
-  print("Final Test ELBO:", final_test_elbo)
+  elbo, stddev = dataset_elbo(model, eval_elbos, train_batches, eval_rng, params)
+  print("Final Train ELBO:", elbo, "+-", 2 * stddev)
+
+  elbo, stddev = dataset_elbo(model, eval_elbos, test_batches, eval_rng, params)
+  print("Final Test ELBO:", elbo, "+-", 2 * stddev)
   
   return params, train_elbos, test_elbos
