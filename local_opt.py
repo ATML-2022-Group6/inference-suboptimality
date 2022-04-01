@@ -1,18 +1,33 @@
-from json import decoder
-import numpy as np
-
-import jax
-from jax.scipy.special import logsumexp
-from jax import numpy as jnp
-from jax.example_libraries import optimizers
-from jax import jit
-from jax import random
-
+from dataclasses import dataclass
 from functools import partial
 
+import jax
+import numpy as np
+from jax import jit
+from jax import numpy as jnp
+from jax import random
+from jax.example_libraries import optimizers
+from jax.scipy.special import logsumexp
 from tqdm.notebook import tqdm, trange
 
 from vae import VAE
+
+@dataclass
+class LocalHyperParams:
+  # samples and LR per iteration
+  learning_rate: float = 1e-3
+  mc_samples: int = 100
+
+  display_epoch: int = 100
+  debug: bool = False
+
+  # IWAE evaluation
+  iwae_samples: int = 100
+
+  # Early stopping 
+  max_epochs: int = 100000
+  patience: int = 10
+  es_epsilon: float = 0.05
 
 @partial(jit, static_argnums=(0,1))
 def batch_iwae(model: VAE, num_samples, images, rng, enc_paramss, dec_params):
@@ -24,17 +39,19 @@ def batch_iwae(model: VAE, num_samples, images, rng, enc_paramss, dec_params):
   
   def run_iwae(rng, image, enc_params):
     rngs = random.split(rng, num_samples)
-    iw_log_summand, _, _, _ = jax.vmap(model.run_local,
+    elbos, _, _, _ = jax.vmap(model.run_local,
         in_axes=(0, None, None, None)
       )( rngs, image, enc_params, dec_params )
 
-    iwelbo = logsumexp(iw_log_summand) - jnp.log(num_samples)
-    return iwelbo
+    iwelbo = logsumexp(elbos) - jnp.log(num_samples)
+    elbo = jnp.mean(elbos)
+
+    return iwelbo, elbo
 
   rngs = random.split(rng, images.shape[0])
-  iwaes = jax.vmap(run_iwae, in_axes=(0, 0, enc_axes))(rngs, images, enc_paramss)
+  iwaes, elbos = jax.vmap(run_iwae, in_axes=(0, 0, enc_axes))(rngs, images, enc_paramss)
 
-  return jnp.mean(iwaes)
+  return jnp.mean(iwaes), jnp.mean(elbos)
 
 @partial(jit, static_argnums=(0,1,2))
 def run_epoch(
@@ -62,19 +79,7 @@ def run_epoch(
 
   return optimizer.update_fn(epoch, g, opt_state), loss
 
-def optimize_local_batch(
-  model: VAE,
-  trained_params,
-  batch,
-  optimizer: optimizers.Optimizer,
-  debug = False,
-  mc_samples = 100,   # samples per train epoch
-  iwae_samples = 100, # IWAE k
-  # Early stopping parameters
-  check_every = 100,
-  patience = 10,
-  epsilon = 0.05,
-):
+def optimize_local_batch(hps: LocalHyperParams, model: VAE, trained_params, batch):
   encoder_params = trained_params[0]
   decoder_params = trained_params[1]
   batch_size = len(batch)
@@ -105,44 +110,44 @@ def optimize_local_batch(
   else:
     init_params = (mu0, logvar0)
 
+  optimizer = optimizers.adam(step_size=hps.learning_rate, eps=1e-4)
   opt_state = optimizer.init_fn(init_params)
 
   best_avg, sentinel = 1e20, 0
   train_loss = []
 
-  with trange(1,10**6) as t:
+  with trange(1, hps.max_epochs+1) as t:
     for epoch in t:
       epoch_rng = random.PRNGKey(epoch)
-      opt_state, loss = run_epoch(model, optimizer, mc_samples, epoch-1, epoch_rng, opt_state, decoder_params, batch)
+      opt_state, loss = run_epoch(
+        model, optimizer, hps.mc_samples,
+        epoch-1, epoch_rng, opt_state, decoder_params, batch
+      )
       train_loss.append(loss)
 
-      if epoch % check_every == 0:
+      if epoch % hps.display_epoch == 0:
         last_avg = jnp.mean(jnp.array(train_loss))
         t.set_postfix(avg_loss=-last_avg)
-        if debug:
+        if hps.debug:
           print("Epoch {:.4f} - ELBO {:.4f}".format(epoch, -last_avg))
-        if last_avg < best_avg - epsilon:
+        if last_avg < best_avg - hps.es_epsilon:
           sentinel, best_avg = 0, last_avg
         else:
           sentinel += 1
-          if sentinel >= patience: break
+          if sentinel >= hps.patience: break
         train_loss = []
 
   final_params = optimizer.params_fn(opt_state)
-  final_elbo = -train_loss[-1]
   iwae_rng = random.PRNGKey(0)
-  final_iwae = batch_iwae(model, iwae_samples, batch, iwae_rng, final_params, decoder_params)
+  final_iwae, final_elbo = batch_iwae(model, hps.iwae_samples, batch, iwae_rng, final_params, decoder_params)
 
   return final_elbo, final_iwae, final_params
 
-def local_opt(
-  model: VAE, dataset, trained_params,
-  optimizer: optimizers.Optimizer = optimizers.adam(step_size=1e-4, eps=1e-4),
-):
+def local_opt(hps: LocalHyperParams, model: VAE, dataset, trained_params):
   elbo_record, iwae_record, param_record = [], [], []
   print("Optimising Local", "Flow" if model.hps.has_flow else "FFG", "...")
   for i, batch in enumerate(tqdm(dataset)):
-    elbo, iwae, params = optimize_local_batch(model, trained_params, batch, optimizer)
+    elbo, iwae, params = optimize_local_batch(hps, model, trained_params, batch)
     elbo_record.append(elbo)
     iwae_record.append(iwae)
     param_record.append(params)
