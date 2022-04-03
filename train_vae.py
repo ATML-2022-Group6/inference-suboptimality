@@ -143,9 +143,12 @@ def train_vae(hps: TrainHyperParams, model: VAE, train_batches, test_batches):
             num_worse = 0
   
   params = get_params(opt_state)
-  file_name = "{}/params_{}.pkl".format(save_dir, time.time_ns() // 10**6)
+  file_name = "{}/params.pkl".format(save_dir)
   utils.save_params(file_name, params)
   print("Saved final params to", file_name)
+
+  utils.save_params(save_dir + "/train_elbos.pkl", train_elbos)
+  utils.save_params(save_dir + "/test_elbos.pkl", test_elbos)
   
   # final ELBOs
   eval_elbos = hps.eval_elbos

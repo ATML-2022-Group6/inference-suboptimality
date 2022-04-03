@@ -19,6 +19,10 @@ def get_mnist(path = MNIST_PATH):
       mnist[k] = jnp.array(mnist[k])
     return mnist
 
+def get_fashion_mnist():
+  # TODO: Fill this in
+  pass
+
 def get_batches(data, batch_size, smaller_data=False, smaller_size=1000):
   """
     Split train data into batches. Discard last batch if uneven for equal size
