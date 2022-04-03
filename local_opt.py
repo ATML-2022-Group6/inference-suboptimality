@@ -19,7 +19,7 @@ class LocalHyperParams:
   mc_samples: int = 100
 
   display_epoch: int = 100
-  debug: bool = False
+  debug: bool = True
 
   # IWAE evaluation
   iwae_samples: int = 100
