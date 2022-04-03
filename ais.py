@@ -3,7 +3,7 @@ from jax import numpy as jnp
 from jax import random, grad, lax, jit
 from jax.scipy.special import logsumexp
 from functools import partial
-from utils import HyperParams, log_bernoulli, log_normal
+from utils import log_bernoulli, log_normal
 from hmc import hmc_sample_and_tune
 
 
