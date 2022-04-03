@@ -39,24 +39,24 @@ class TrainHyperParams:
   patience: int = 10
   es_epsilon: float = 0.05
 
-def dataset_elbo(model, num_samples, dataset, rng, params):
-  """ Compute mean and estimated std. dev. (of mean) of computing the dataset ELBO `num_sample` times. """
-
+@partial(jit, static_argnums=(0,))
+def dataset_elbo(model, dataset, rng, params):
   def batch_elbo(images, rng):
     rngs = random.split(rng, images.shape[0])
     elbos, _, _, _ = jax.vmap(model.run, in_axes=(None, 0, 0))(params, images, rngs)
     return jnp.mean(elbos)
   
-  @jit
-  def full_elbo(rng):
-    rngs = random.split(rng, dataset.shape[0])
-    elbos = jax.vmap(batch_elbo)(dataset, rngs)
-    return jnp.mean(elbos)
+  rngs = random.split(rng, dataset.shape[0])
+  elbos = jax.vmap(batch_elbo)(dataset, rngs)
+  return jnp.mean(elbos)
+
+def elbo_estimate(model, num_samples, dataset, rng, params):
+  """ Compute mean and estimated std. dev. (of mean) of computing the dataset ELBO `num_sample` times. """
   
   rngs = random.split(rng, num_samples)
   elbos = []
   for i in trange(num_samples):
-    elbo = full_elbo(rngs[i])
+    elbo = dataset_elbo(model, dataset, rngs[i], params)
     elbos.append(elbo)
   elbos = jnp.array(elbos)
 
@@ -130,7 +130,7 @@ def train_vae(hps: TrainHyperParams, model: VAE, train_batches, test_batches):
         utils.save_params(file_name, get_params(opt_state))
 
       if epoch % display_epoch == 0:
-        test_elbo, _ = dataset_elbo(model, 10, test_batches, epoch_rng, get_params(opt_state))
+        test_elbo = dataset_elbo(model, test_batches, epoch_rng, get_params(opt_state))
         print("Epoch {} - Train {}, Test {}".format(epoch, train_elbo, test_elbo))
 
         test_elbo = float(test_elbo)
