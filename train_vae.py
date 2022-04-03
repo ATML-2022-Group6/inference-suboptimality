@@ -33,7 +33,7 @@ class TrainHyperParams:
 
   # schedule in terms of epoch, default to:
   # exponential decay 1e-3 to 1e-4 over 3000 epochs
-  lr_schedule: Callable = lambda epoch: jnp.maximum(1e-3 * 0.1 ** (epoch // 3000), 1e-4)
+  lr_schedule: Callable = lambda epoch: jnp.maximum(1e-3 * 0.1 ** (epoch / 3000), 1e-4)
 
   early_stopping: bool = False
   patience: int = 10
