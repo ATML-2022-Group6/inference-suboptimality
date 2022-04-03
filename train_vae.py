@@ -39,7 +39,6 @@ class TrainHyperParams:
   patience: int = 10
   es_epsilon: float = 0.05
 
-@partial(jit, static_argnums=(0,1))
 def dataset_elbo(model, num_samples, dataset, rng, params):
   """ Compute mean and estimated std. dev. (of mean) of computing the dataset ELBO `num_sample` times. """
 
@@ -48,13 +47,18 @@ def dataset_elbo(model, num_samples, dataset, rng, params):
     elbos, _, _, _ = jax.vmap(model.run, in_axes=(None, 0, 0))(params, images, rngs)
     return jnp.mean(elbos)
   
+  @jit
   def full_elbo(rng):
     rngs = random.split(rng, dataset.shape[0])
     elbos = jax.vmap(batch_elbo)(dataset, rngs)
     return jnp.mean(elbos)
   
   rngs = random.split(rng, num_samples)
-  elbos = jax.vmap(full_elbo)(rngs)
+  elbos = []
+  for i in trange(num_samples):
+    elbo = full_elbo(rngs[i])
+    elbos.append(elbo)
+  elbos = jnp.array(elbos)
 
   elbo_var = jnp.var(elbos)
   mean_stddev = (elbo_var / num_samples) ** 0.5
@@ -149,17 +153,5 @@ def train_vae(hps: TrainHyperParams, model: VAE, train_batches, test_batches):
 
   utils.save_params(save_dir + "/train_elbos.pkl", train_elbos)
   utils.save_params(save_dir + "/test_elbos.pkl", test_elbos)
-  
-  # final ELBOs
-  eval_elbos = hps.eval_elbos
-  eval_rng = random.PRNGKey(0)
-
-  print("Evaluating final ELBOs...")
-
-  elbo, stddev = dataset_elbo(model, eval_elbos, train_batches, eval_rng, params)
-  print("Final Train ELBO:", elbo, "+-", 2 * stddev)
-
-  elbo, stddev = dataset_elbo(model, eval_elbos, test_batches, eval_rng, params)
-  print("Final Test ELBO:", elbo, "+-", 2 * stddev)
   
   return params, train_elbos, test_elbos
