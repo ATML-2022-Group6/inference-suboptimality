@@ -24,19 +24,19 @@ class LocalHyperParams:
   # IWAE evaluation
   iwae_samples: int = 100
 
-  # Early stopping 
+  # Early stopping
   max_epochs: int = 100000
   patience: int = 10
   es_epsilon: float = 0.05
 
 @partial(jit, static_argnums=(0,1))
 def batch_iwae(model: VAE, num_samples, images, rng, enc_paramss, dec_params):
-  
+
   if model.hps.has_flow:
     enc_axes = (0, 0, None)
   else:
     enc_axes = (0, 0)
-  
+
   def run_iwae(rng, image, enc_params):
     rngs = random.split(rng, num_samples)
     elbos, _, _, _ = jax.vmap(model.run_local,
@@ -63,7 +63,7 @@ def run_epoch(
     enc_axes = (0, 0, None)
   else:
     enc_axes = (0, 0)
-  
+
   def loss_fn(rng, image, enc_params):
     rngs = random.split(rng, num_samples)
     elbos, _, _, _ = jax.vmap(model.run_local, in_axes=(0, None, None, None))(rngs, image, enc_params, decoder_params)
@@ -154,4 +154,4 @@ def local_opt(hps: LocalHyperParams, model: VAE, dataset, trained_params):
     print("Batch {}, ELBO {:.4f}, IWAE {:.4f}".format(i+1, elbo, iwae))
   print("Average ELBO {:.4f}".format(np.nanmean(elbo_record)))
   print("Average IWAE {:.4f}".format(np.nanmean(iwae_record)))
-  return param_record
+  return elbo_record, iwae_record, param_record
