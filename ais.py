@@ -5,25 +5,26 @@ from jax.scipy.special import logsumexp
 from functools import partial
 from utils import log_bernoulli, log_normal
 from hmc import hmc_sample_and_tune
+from vae import VAE
 
+from dataclasses import dataclass
 
-@partial(jit, static_argnums=(1,))
-def ais_trajectory(
-  rng,
-  model,
-  decoder_params,
-  x,  # Input image.
-  annealing_schedule=jnp.linspace(0., 1., 10000),
-):
+@dataclass(eq=True, frozen=True)
+class AISHyperParams:
+  num_iwae_samples: int = 10
+  annealing_steps: int = 10000
+
+@partial(jit, static_argnums=(0,1))
+def ais_trajectory(hps: AISHyperParams, model: VAE, decoder_params, image, rng):
   """Annealed importance sampling trajectories for a single batch."""
   latent_size = model.hps.latent_size
 
   v_rng, z_rng, hmc_rng = random.split(rng, num=3)
 
-  def log_f_i(z, x, beta):
+  def log_f_i(z, beta):
     log_prior = log_normal(z)
     logit = model.decoder(decoder_params, z)
-    log_likelihood = log_bernoulli(logit, x)
+    log_likelihood = log_bernoulli(logit, image)
 
     return log_prior + beta * log_likelihood
 
@@ -31,12 +32,12 @@ def ais_trajectory(
     current_z, stepsize, accept_trace = accum
     beta_0, beta_1, period_elapsed = args
 
-    log_int_1 = log_f_i(current_z, x, beta_0)
-    log_int_2 = log_f_i(current_z, x, beta_1)
+    log_int_1 = log_f_i(current_z, beta_0)
+    log_int_2 = log_f_i(current_z, beta_1)
     log_importance_weight = log_int_2 - log_int_1
 
     def U(z):
-      return -log_f_i(z, x, beta_1)
+      return -log_f_i(z, beta_1)
 
     def grad_U(z):
       gradient = grad(U)(z)
@@ -57,26 +58,32 @@ def ais_trajectory(
 
     return new_accum, log_importance_weight
 
-  stepsize = jnp.ones(1)*0.01
-  accept_trace = jnp.zeros(1)
-  current_z = random.normal(z_rng, shape=(latent_size,))
-  init_accum = (current_z, stepsize, accept_trace)
+  stepsize = 0.01
+  accept_trace = 0.0
+  init_z = random.normal(z_rng, shape=(latent_size,))
+  init_accum = (init_z, stepsize, accept_trace)
 
-  xs = (annealing_schedule[:-1], annealing_schedule[1:], jnp.arange(1,len(annealing_schedule)))
-
-  final_accum, log_weights = jax.lax.scan(ais_step, init_accum, xs)
+  annealing_schedule = jnp.linspace(0., 1., hps.annealing_steps)
+  scan_args = (
+    annealing_schedule[:-1], annealing_schedule[1:], jnp.arange(1, hps.annealing_steps)
+  )
+  _, log_weights = jax.lax.scan(ais_step, init_accum, scan_args)
 
   return jnp.sum(log_weights)
 
-@partial(jit, static_argnums=(1,))
-def batch_ais_fn(rng, model, decoder_params, images):
-  rngs = random.split(rng, len(images))
-  return jnp.mean(jax.vmap(ais_trajectory, in_axes=(0, None, None, 0))(rngs, model, decoder_params, images))
+@partial(jit, static_argnums=(0, 1))
+def ais_iwelbo(hps: AISHyperParams, model, decoder_params, image, rng):
+  rngs = random.split(rng, hps.num_iwae_samples)
+  logws = jax.vmap(ais_trajectory, in_axes=(None, None, None, None, 0))(
+    hps, model, decoder_params, image, rngs
+  )
+  logw_iwae = logsumexp(logws) - jnp.log(hps.num_iwae_samples)
+  return logw_iwae
 
-@partial(jit, static_argnums=(1,2))
-def ais_iwelbo_fn(rng, model,num_samples, decoder_params, images):
-  rngs = random.split(rng, num_samples)
-  logw_log_summand = jax.vmap(batch_ais_fn, in_axes=(0, None, None, None))( rngs, model, decoder_params, images )
-  K = num_samples
-  logw_iwae_K = logsumexp(logw_log_summand) - jnp.log(K)
-  return logw_iwae_K
+@partial(jit, static_argnums=(0, 1))
+def batch_ais_iwelbo(hps, model, decoder_params, images, rng):
+  rngs = random.split(rng, len(images))
+  logw_iwaes = jax.vmap(ais_iwelbo, in_axes=(None, None, None, 0, 0))(
+    hps, model, decoder_params, images, rngs
+  )
+  return jnp.mean(logw_iwaes)
