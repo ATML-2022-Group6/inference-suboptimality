@@ -38,9 +38,6 @@ def _leapfrog_integrator(
   Based on Xuechen, which in turn is based on
   Neal (https://arxiv.org/pdf/1206.1901.pdf).
   """
-  # For some reason, without the reshape things break.
-  stepsize = jnp.reshape(stepsize, newshape=(-1, 1))
-
   q = current_q
 
   # Start with half step for momentum.
