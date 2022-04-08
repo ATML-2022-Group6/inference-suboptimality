@@ -98,13 +98,8 @@ def optimize_local_batch(hps: LocalHyperParams, model: VAE, trained_params, batc
   if model.hps.has_flow:
 
     # Note: We use a *single* flow network across the batch
-
-    # take trained flow params if available, otherwise sample randomly
-    if len(trained_params) > 2:
-      flow_params0 = trained_params[2]
-    else:
-      flow_rng = random.PRNGKey(0)
-      flow_params0 = model.init_flow(flow_rng)
+    flow_rng = random.PRNGKey(0)
+    flow_params0 = model.init_flow(flow_rng)
     init_params = (mu0, logvar0, flow_params0)
 
   else:
