@@ -43,11 +43,20 @@ def _leapfrog_integrator(
   # Start with half step for momentum.
   p = current_p - 0.5*stepsize*grad_U(q)
 
-  for i in range(1, num_steps+1):
-    q = q + p*stepsize  # Full step for position.
-    # Full step for momentum, while not end of trajectory.
-    if i < num_steps:
-      p = p - stepsize*grad_U(q)
+  def loop(acc, _):
+    q, p = acc
+    q += p * stepsize
+    p -= stepsize * grad_U(q)
+    return (q, p), None
+
+  (q, p), _ = lax.scan(loop, (q, p), jnp.arange(num_steps-1))
+  q += p * stepsize
+
+  # for i in range(1, num_steps+1):
+  #   q = q + p*stepsize  # Full step for position.
+  #   # Full step for momentum, while not end of trajectory.
+  #   if i < num_steps:
+  #     p = p - stepsize*grad_U(q)
 
   # Finally do a half step for momentum.
   p = p - 0.5*stepsize*grad_U(q)
