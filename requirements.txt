@@ -1,6 +1,6 @@
 jax
 matplotlib
 numpy
-flax
+scipy
 tqdm
 jupyter
