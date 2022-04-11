@@ -1,7 +1,6 @@
 from functools import partial
-from jax import lax, random, jit
+from jax import random, jit
 from jax import numpy as jnp
-from jax.scipy import stats
 from jax.example_libraries import stax
 
 from flow import build_aux_flow

@@ -1,10 +1,8 @@
-from jax import numpy as jnp
-from jax.example_libraries import stax
-
+import pickle
 from dataclasses import dataclass
 
+from jax import numpy as jnp
 from jax.tree_util import tree_map
-import pickle
 
 @dataclass
 class HyperParams:
@@ -18,11 +16,10 @@ class HyperParams:
   flow_hidden_size: int = 200
 
 def log_bernoulli(logit, target):
-  # Numerically equivalent to Binary Cross Entropy loss (TODO: How?)
+  # Numerically equivalent to negative Binary Cross Entropy loss (see comment below)
   bce_loss = jnp.maximum(logit, 0.) - logit * target + jnp.logaddexp(0., -jnp.abs(logit))
   return -jnp.sum(bce_loss)
 
-# Equivalent to below
 # def log_sigmoid(x):
 #   return -jnp.logaddexp(0, -x)
 # def bce(logit, target):
